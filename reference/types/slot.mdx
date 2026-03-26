@@ -1,0 +1,112 @@
+---
+title: "Slot"
+description: "The Slot type represents a cold storage position in the warehouse bodega zone."
+keywords: ["slot", "bodega", "cold storage", "position", "types"]
+---
+
+A `Slot` is one of the fixed positions inside the main cold storage zone (bodega). Each slot either holds a box — identified by its `autoId` — or is free. A slot is considered **free** when its `autoId` is an empty string (`""`).
+
+## Type definition
+
+```typescript
+export type Slot = {
+  position: number;
+  autoId: string;
+  name: string;
+  temperature: number | null;
+  client: string;
+};
+```
+
+## Fields
+
+<ResponseField name="position" type="number" required>
+  The slot's numeric position in the bodega. Default warehouses use positions **1–12**.
+</ResponseField>
+
+<ResponseField name="autoId" type="string" required>
+  Auto-generated identifier for the box occupying this slot. Uses the format `{PREFIX}-YYYYMMDD-NNN` where `NNN` is a daily counter (e.g., `CAJ-20260326-001` for inbound registrations). When the slot is free, this is an empty string (`""`).
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Human-readable name of the box or item stored in this slot. Empty string when the slot is free.
+</ResponseField>
+
+<ResponseField name="temperature" type="number | null" required>
+  Current temperature reading in degrees Celsius. `null` when no temperature has been recorded for this slot. This is the key difference from `Box.temperature`, which is always a `number`.
+</ResponseField>
+
+<ResponseField name="client" type="string" required>
+  Client identifier string indicating which client owns the contents of this slot. Empty string when the slot is free.
+</ResponseField>
+
+<Note>
+  A slot is "free" when `autoId === ""`. You can use this as the canonical check for slot availability rather than relying on `name` or `client` being empty.
+</Note>
+
+## Slot vs. Box
+
+`Slot` and `Box` share the same shape except for one important difference:
+
+| Field | `Slot` | `Box` |
+|---|---|---|
+| `temperature` | `number \| null` | `number` |
+
+Slots can have an unset temperature (`null`) because a cold storage position may exist before any reading has been recorded. Boxes in transit zones (ingresos, salida) always carry a concrete temperature value.
+
+---
+
+## BodegaStats
+
+`BodegaStats` holds rolling counters for the three main operation categories in the warehouse.
+
+```typescript
+export type BodegaStats = {
+  ingresos: number;
+  salidas: number;
+  movimientosBodega: number;
+};
+```
+
+<ResponseField name="ingresos" type="number" required>
+  Total number of inbound box entries recorded.
+</ResponseField>
+
+<ResponseField name="salidas" type="number" required>
+  Total number of outbound dispatches recorded.
+</ResponseField>
+
+<ResponseField name="movimientosBodega" type="number" required>
+  Total number of internal bodega movements recorded.
+</ResponseField>
+
+---
+
+## HistoryState
+
+`HistoryState` is the structure of the historical log stored in Firestore under `warehouses/{warehouseId}/state/history`.
+
+```typescript
+export type HistoryState = {
+  ingresos: Box[];
+  salidas: BodegaOrder[];
+  movimientosBodega: BodegaOrder[];
+  alertas: AlertHistoryEntry[];
+};
+```
+
+<ResponseField name="ingresos" type="Box[]" required>
+  Array of `Box` records representing all boxes that have been received into the warehouse.
+</ResponseField>
+
+<ResponseField name="salidas" type="BodegaOrder[]" required>
+  Array of completed `a_salida` orders representing outbound dispatches.
+</ResponseField>
+
+<ResponseField name="movimientosBodega" type="BodegaOrder[]" required>
+  Array of completed `a_bodega` orders representing internal movements into bodega slots.
+</ResponseField>
+
+<ResponseField name="alertas" type="AlertHistoryEntry[]" required>
+  Array of resolved alert history entries. See the [Order reference](/reference/types/order) for the `AlertHistoryEntry` type.
+</ResponseField>

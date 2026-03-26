@@ -1,0 +1,125 @@
+---
+title: "Reports"
+description: "Track daily activity, view history, and export PDF reports in Bodega de Frío."
+---
+
+The **Reportes** tab gives administrators and clients a real-time summary of warehouse activity along with detailed history drilldowns and PDF export.
+
+## Accessing reports
+
+Navigate to the **Reportes** tab in the dashboard. This tab is visible to users with the **administrador** or **cliente** role.
+
+<Info>
+  Clients see a filtered view — only boxes, orders, and alerts associated with their `clientId` are included in the data.
+</Info>
+
+## What gets tracked
+
+History is persisted to Firestore at `warehouses/{warehouseId}/state/history` as a `HistoryState` document:
+
+```typescript
+type HistoryState = {
+  ingresos: Box[];               // every box registered in Ingresos
+  salidas: BodegaOrder[];        // every a_salida order executed
+  movimientosBodega: BodegaOrder[]; // every a_bodega order executed
+  alertas: AlertHistoryEntry[];  // every alert that was generated
+};
+```
+
+Each category is appended to in real time:
+
+| Event | History function called |
+|---|---|
+| Box registered in Ingresos | `addIngreso(box)` |
+| `a_salida` order executed | `addSalida(order)` |
+| `a_bodega` order executed | `addMovimientoBodega(order)` |
+| Alert generated | `addAlerta(entry)` |
+
+## Daily stats
+
+The `BodegaStats` object tracks running counters for the current session and is stored in `warehouses/{warehouseId}/state/main`:
+
+```typescript
+type BodegaStats = {
+  ingresos: number;          // total boxes registered
+  salidas: number;           // total a_salida orders executed
+  movimientosBodega: number; // total a_bodega orders executed
+};
+```
+
+These counters increment as operations occur and are displayed as the summary cards on the Reports page.
+
+## Summary charts
+
+The Reports view renders two charts using [Recharts](https://recharts.org):
+
+<CardGroup cols={2}>
+  <Card title="Bar chart" icon="chart-bar">
+    Displays totals for Ingresos, Salidas, Movimientos a bodega, Despachados, and Alertas side by side.
+  </Card>
+  <Card title="Pie chart" icon="chart-pie">
+    Shows the proportional distribution of the same five categories.
+  </Card>
+</CardGroup>
+
+## Drilldown modals
+
+Clicking any summary card opens a detail modal listing every individual record in that category:
+
+| Card | Shows |
+|---|---|
+| **Ingresos** | All boxes from `HistoryState.ingresos` with position, name, client, temperature, and autoId |
+| **Salidas** | All orders from `HistoryState.salidas` with order ID, creator role, date, and source position |
+| **Movimientos a bodega** | All orders from `HistoryState.movimientosBodega` |
+| **Despachados** | All boxes in `dispatchedBoxes` |
+| **Alertas** | All entries from `HistoryState.alertas` |
+
+## PDF export
+
+The **cliente** role can export a per-box history timeline as a PDF.
+
+<Steps>
+  <Step title="Select a client and box">
+    In the Reports header, select the client from the first dropdown, then select a specific box from the second dropdown. The timeline modal opens automatically.
+  </Step>
+  <Step title="Review the timeline">
+    The modal displays chronological events for the selected box: ingreso, movimientos, revisiones, salida, despacho, and related alertas.
+  </Step>
+  <Step title="Click Exportar PDF">
+    The export button calls `handleExportPdf`, which:
+    1. Imports `html2canvas` and `jsPDF` dynamically.
+    2. Captures the modal content as a canvas at `scale: 2` for high resolution.
+    3. Converts the canvas to PNG and embeds it in a PDF sized to match the canvas dimensions.
+    4. Saves the file as `historial-caja.pdf`.
+  </Step>
+</Steps>
+
+```typescript
+// PDF generation pipeline
+const [{ default: html2canvas }, jsPDFLib] = await Promise.all([
+  import("html2canvas"),
+  import("jspdf"),
+]);
+const canvas = await html2canvas(node, { scale: 2 });
+const pdf = new JsPDF({
+  orientation: "p",
+  unit: "px",
+  format: [canvas.width, canvas.height],
+});
+pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
+pdf.save("historial-caja.pdf");
+```
+
+<Tip>
+  The exporter sanitizes CSS color values before capturing the canvas to avoid `lab()` and `oklab()` color function rendering failures in html2canvas.
+</Tip>
+
+## Firestore location
+
+All history data is stored at:
+
+```
+warehouses/{warehouseId}/state/history
+```
+
+The document is initialized automatically when the warehouse is created via `ensureHistoryState`. Live subscription is handled by `subscribeHistoryState`.

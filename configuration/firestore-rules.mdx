@@ -1,0 +1,102 @@
+---
+title: 'Firestore security rules'
+description: 'The Firestore security rules used by Bodega de Frío, with an explanation of each rule and instructions for deploying them.'
+keywords: ['firestore', 'security rules', 'firebase', 'permissions', 'deployment']
+---
+
+Bodega de Frío ships a `firestore.rules` file at the project root. These rules gate every read and write operation in Firestore, requiring an authenticated session for all collections except `users`, which additionally enforces per-document ownership.
+
+## Rules
+
+```javascript firestore.rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Docs de la colección principal de bodegas
+    match /warehouses/{warehouseId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Cualquier subcolección dentro de una bodega (ej. state/main)
+    match /warehouses/{warehouseId}/{col}/{doc} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Clients catalog managed by rol configurador
+    match /clientes/{clientId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Usuarios de configuración (separados del perfil auth /users)
+    match /usuarios/{userId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
+```
+
+## Rule explanations
+
+### `/warehouses/{warehouseId}`
+
+Any authenticated user can read and write the top-level warehouse document. This document stores warehouse metadata and is the root of every warehouse's data tree.
+
+### `/warehouses/{warehouseId}/{col}/{doc}`
+
+Any authenticated user can read and write any document inside any subcollection of a warehouse. This covers the two subcollections the app actively uses:
+
+- `state/main` — live operational state (slots, boxes, orders, alerts, stats)
+- `state/history` — historical ingress, egress, and movement records
+
+Because the wildcard covers `{col}/{doc}`, it applies to any future subcollections you add under a warehouse document without requiring a rule change.
+
+### `/clientes/{clientId}`
+
+Any authenticated user can read and write client catalog documents. Client records are managed by users holding the configurador role within the app.
+
+### `/usuarios/{userId}`
+
+Any authenticated user can read and write configuration user records. These documents are distinct from the Firebase Auth user objects and from the `/users` profile documents — they hold application-level user configuration.
+
+### `/users/{uid}`
+
+A user can only read and write their own profile document. The rule `request.auth.uid == uid` enforces that the authenticated user's UID must match the document ID they are trying to access. No user can read or modify another user's profile.
+
+<Note>
+  All rules require `request.auth != null`, which means unauthenticated (anonymous or signed-out) requests are denied across every collection.
+</Note>
+
+## Deploying the rules
+
+You need the [Firebase CLI](https://firebase.google.com/docs/cli) installed and linked to your project.
+
+<Steps>
+  <Step title="Install the Firebase CLI">
+    ```bash
+    npm install -g firebase-tools
+    ```
+  </Step>
+
+  <Step title="Log in and select your project">
+    ```bash
+    firebase login
+    firebase use your-project-id
+    ```
+  </Step>
+
+  <Step title="Deploy only the Firestore rules">
+    ```bash
+    firebase deploy --only firestore:rules
+    ```
+
+    Firebase validates the rules file and pushes it live. Changes take effect within a few seconds.
+  </Step>
+</Steps>
+
+<Warning>
+  The current rules grant any authenticated user full read and write access to warehouses, clientes, and usuarios. For a multi-tenant or multi-role production deployment, consider tightening the rules — for example, by checking a custom claim or a role field on the user document — to prevent one warehouse's operators from reading or modifying another warehouse's data.
+</Warning>

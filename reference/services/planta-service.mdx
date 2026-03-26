@@ -1,0 +1,238 @@
+---
+title: "PlantaService"
+description: "CRUD service for managing cold storage plants (plantas) in Firestore."
+---
+
+`PlantaService` is a plain object that exposes async methods for creating, reading, updating, and deleting cold storage plant records. Unlike `CompradorService`, `create` accepts a rich data payload covering the plant's physical characteristics.
+
+## Firestore path
+
+```
+warehouses/GENERAL/plantas/{documentId}
+```
+
+## Planta type
+
+```typescript
+export interface Planta {
+  id?: string;           // Firestore document ID (populated after reads)
+  numericId: number;     // Auto-incremented integer
+  code: string;          // Base-36 string, 4 characters, uppercase
+  name: string;          // Razón social (legal name of the operating entity)
+  plantName: string;     // Physical name of the plant or warehouse
+  location: string;      // City or logistics zone
+  maxPallets: number;    // Total pallet capacity
+  tempRange: string;     // Thermal range, e.g. "-20°C a 5°C"
+  isOperational: boolean;
+  createdAt: number;     // Unix timestamp in milliseconds
+}
+```
+
+<ResponseField name="id" type="string">
+  Firestore document ID. Set automatically on read; absent on write objects.
+</ResponseField>
+
+<ResponseField name="numericId" type="number">
+  Monotonically increasing integer assigned at creation time. Immutable after creation.
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Base-36 representation of `numericId`, uppercase, left-padded to 4 characters. Immutable after creation.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Razón social — the legal name of the entity operating the plant.
+</ResponseField>
+
+<ResponseField name="plantName" type="string">
+  The physical or commercial name of the cold storage facility.
+</ResponseField>
+
+<ResponseField name="location" type="string">
+  City or logistics zone where the plant is located.
+</ResponseField>
+
+<ResponseField name="maxPallets" type="number">
+  Maximum number of pallet positions the plant can hold.
+</ResponseField>
+
+<ResponseField name="tempRange" type="string">
+  Supported thermal range expressed as a string, e.g. `"-20°C a 5°C"`.
+</ResponseField>
+
+<ResponseField name="isOperational" type="boolean">
+  Whether the plant is currently active and accepting inventory.
+</ResponseField>
+
+<ResponseField name="createdAt" type="number">
+  Unix timestamp (milliseconds) recorded at creation via `Date.now()`.
+</ResponseField>
+
+---
+
+## Methods
+
+### PlantaService.toBase36
+
+```typescript
+toBase36(num: number): string
+```
+
+Converts a positive integer to an uppercase base-36 string padded to a minimum of 4 characters. Identical in behavior to `CompradorService.toBase36`.
+
+<ParamField path="num" type="number" required>
+  The integer to convert. Used internally with `numericId` values.
+</ParamField>
+
+<ResponseField name="returns" type="string">
+  Uppercase base-36 string, at least 4 characters long. For example: `1` → `"0001"`, `10` → `"000A"`, `36` → `"0010"`.
+</ResponseField>
+
+---
+
+### PlantaService.getAll
+
+```typescript
+async getAll(): Promise<Planta[]>
+```
+
+Fetches all plantas from Firestore ordered by `numericId` ascending.
+
+<ResponseField name="returns" type="Promise<Planta[]>">
+  Resolves with an array of plantas sorted by `numericId` ascending. Returns an empty array on error — the method never rejects.
+</ResponseField>
+
+```typescript
+import { PlantaService } from "@/app/services/plantaService";
+
+const plantas = await PlantaService.getAll();
+```
+
+<Note>
+  On error, `getAll` logs to `console.error` and returns `[]` instead of throwing.
+</Note>
+
+---
+
+### PlantaService.create
+
+```typescript
+async create(
+  data: Omit<Planta, 'id' | 'numericId' | 'code' | 'createdAt'>
+): Promise<DocumentReference>
+```
+
+Creates a new planta with an auto-incremented `numericId` and a derived `code`. You supply all user-defined fields; the service computes and attaches `numericId`, `code`, and `createdAt` automatically.
+
+<ParamField path="data.name" type="string" required>
+  Razón social of the operating entity.
+</ParamField>
+
+<ParamField path="data.plantName" type="string" required>
+  Physical or commercial name of the plant.
+</ParamField>
+
+<ParamField path="data.location" type="string" required>
+  City or logistics zone.
+</ParamField>
+
+<ParamField path="data.maxPallets" type="number" required>
+  Maximum pallet capacity.
+</ParamField>
+
+<ParamField path="data.tempRange" type="string" required>
+  Supported thermal range, e.g. `"-20°C a 5°C"`.
+</ParamField>
+
+<ParamField path="data.isOperational" type="boolean" required>
+  Whether the plant is currently operational.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<DocumentReference>">
+  Resolves with the Firestore `DocumentReference` for the newly created document.
+</ResponseField>
+
+```typescript
+import { PlantaService } from "@/app/services/plantaService";
+
+const ref = await PlantaService.create({
+  name: "Frigoríficos del Norte S.A.",
+  plantName: "Bodega Fría 1",
+  location: "Monterrey",
+  maxPallets: 500,
+  tempRange: "-25°C a -10°C",
+  isOperational: true,
+});
+```
+
+---
+
+### PlantaService.update
+
+```typescript
+async update(id: string, data: Partial<Planta>): Promise<void>
+```
+
+Updates the mutable fields of a planta document. The fields `id`, `numericId`, and `code` are always excluded from the write to preserve record integrity.
+
+<ParamField path="id" type="string" required>
+  The Firestore document ID of the planta to update.
+</ParamField>
+
+<ParamField path="data" type="Partial<Planta>" required>
+  Update payload. The following fields are applied if present:
+
+  <Expandable title="Updatable fields">
+    <ResponseField name="name" type="string">
+      Updated razón social.
+    </ResponseField>
+    <ResponseField name="plantName" type="string">
+      Updated physical plant name.
+    </ResponseField>
+    <ResponseField name="location" type="string">
+      Updated city or logistics zone.
+    </ResponseField>
+    <ResponseField name="maxPallets" type="number">
+      Updated pallet capacity.
+    </ResponseField>
+    <ResponseField name="tempRange" type="string">
+      Updated thermal range.
+    </ResponseField>
+    <ResponseField name="isOperational" type="boolean">
+      Updated operational status.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+```typescript
+await PlantaService.update("firestoreDocId", {
+  isOperational: false,
+  maxPallets: 600,
+});
+```
+
+<Warning>
+  `id`, `numericId`, and `code` in `data` are silently ignored. They cannot be changed after creation.
+</Warning>
+
+---
+
+### PlantaService.delete
+
+```typescript
+async delete(id: string): Promise<void>
+```
+
+Deletes a planta document from Firestore by its document ID.
+
+<ParamField path="id" type="string" required>
+  The Firestore document ID of the planta to delete.
+</ParamField>
+
+```typescript
+await PlantaService.delete("firestoreDocId");
+```
+
+<Warning>
+  Deletion is permanent. `numericId` values are not recycled after deletion.
+</Warning>

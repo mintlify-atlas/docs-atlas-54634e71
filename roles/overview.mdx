@@ -1,0 +1,60 @@
+---
+title: 'User roles'
+description: 'Overview of the six roles in Bodega de Frío and how they map to warehouse responsibilities.'
+---
+
+Bodega de Frío uses a role-based access model. Every authenticated user has exactly one role stored in Firestore. The role determines which dashboard tabs are visible, which actions are available, and which data the user can see.
+
+## Role type
+
+```typescript
+export type Role = "custodio" | "administrador" | "operario" | "jefe" | "cliente" | "configurador";
+```
+
+## Roles at a glance
+
+<CardGroup cols={2}>
+  <Card title="custodio" icon="warehouse">
+    Base warehouse operator. Registers incoming boxes through the **ingresos** tab and manages slot-level operations such as dispatching and returns.
+  </Card>
+  <Card title="operario" icon="person-digging">
+    Field operator. Executes orders assigned by the **jefe**, reports order failures as alerts, and resolves temperature and report alerts that are delegated to them.
+  </Card>
+  <Card title="jefe" icon="user-tie">
+    Supervisor. Creates movement orders (`a_bodega`, `a_salida`, `revisar`) from the **ordenes** tab, reviews pending alerts, and assigns temperature and report alerts to the **operario**.
+  </Card>
+  <Card title="administrador" icon="shield-halved">
+    Full-access administrator. Views the warehouse state (**estado**), runs searches, selects and creates warehouses, and accesses the **AdminSection** menu with modules for compras, transporte, bodega_interna, and bodega_externa.
+  </Card>
+  <Card title="cliente" icon="box">
+    Client view. Sees only boxes, orders, dispatched items, alerts, and reports that belong to their own `clientId`. Cannot create orders or modify warehouse state.
+  </Card>
+  <Card title="configurador" icon="sliders">
+    System configurator. Manages users (`usuarios` collection) and clients (`clientes` collection) through the **configuracion** tab, and controls warehouse settings including creating and toggling warehouses.
+  </Card>
+</CardGroup>
+
+## Role assignment
+
+Roles are stored in Firestore. When a user signs in, the dashboard reads the profile from the following locations in order:
+
+1. `users/{uid}` — primary profile document
+2. `usuarios/{uid}` — fallback profile document (used for users created through the configurator)
+
+The `role` field on either document must be one of the six valid `Role` values. If the field is missing, authentication succeeds but the dashboard throws an error and prevents access.
+
+<Note>
+New users created through the **configuracion** tab are always written to the `usuarios/{uid}` collection. Their `role`, `clientId`, `createdBy`, and `createdByRole` fields are set at creation time.
+</Note>
+
+<Warning>
+If a user document exists in neither `users` nor `usuarios`, or if the `role` field is absent, the user cannot access the dashboard even with valid Firebase Auth credentials.
+</Warning>
+
+## Learn more
+
+<CardGroup cols={1}>
+  <Card title="Role guide" icon="book-open" href="/roles/role-guide">
+    Detailed breakdown of what each role can see and do — tabs, actions, and restrictions.
+  </Card>
+</CardGroup>

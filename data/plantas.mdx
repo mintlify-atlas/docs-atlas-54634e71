@@ -1,0 +1,130 @@
+---
+title: 'Plantas'
+description: 'Managing cold storage plants and physical facilities in the system.'
+keywords: ['plantas', 'cold storage', 'facilities', 'warehouse', 'data management']
+---
+
+A **planta** is a physical cold storage facility registered in Bodega de Frío. Each plant captures not only its identity code but also its operational specs: pallet capacity, thermal range, and current operational status.
+
+## Data model
+
+```typescript
+export interface Planta {
+  id?: string;           // Firestore document ID
+  numericId: number;     // Auto-increment integer
+  code: string;          // Base-36 encoded, 4-character padded
+  name: string;          // Razón social (company name)
+  plantName: string;     // Physical facility name
+  location: string;      // City or logistics zone
+  maxPallets: number;    // Total position capacity
+  tempRange: string;     // Thermal range (e.g., "-20°C a 5°C")
+  isOperational: boolean;
+  createdAt: number;     // Unix timestamp (ms)
+}
+```
+
+### Field reference
+
+| Field | Type | Description |
+|---|---|---|
+| **id** | `string` | Firestore document ID, assigned by Firebase on creation. |
+| **numericId** | `number` | Auto-incremented integer. Determined by querying the highest existing `numericId` and adding 1. |
+| **code** | `string` | Base-36 encoding of `numericId`, zero-padded to 4 characters. |
+| **name** | `string` | Razón social — the legal company name associated with the plant. |
+| **plantName** | `string` | The physical name of the facility or warehouse building. |
+| **location** | `string` | The city or logistics zone where the plant is located. |
+| **maxPallets** | `number` | Total number of pallet positions available in the facility. |
+| **tempRange** | `string` | The thermal operating range of the facility (e.g., `"-20°C a 5°C"`). |
+| **isOperational** | `boolean` | Whether the plant is currently active and accepting inventory. |
+| **createdAt** | `number` | Unix timestamp in milliseconds recorded at creation. |
+
+### How the code system works
+
+The **code** field uses the same base-36 encoding as compradores and proveedores: the **numericId** is converted to base 36 and padded to 4 characters.
+
+```
+numericId  →  code
+1          →  0001
+10         →  000A
+35         →  000Z
+36         →  0010
+```
+
+<Note>
+**code** and **numericId** are immutable after creation. You can update all other fields — **name**, **plantName**, **location**, **maxPallets**, **tempRange**, and **isOperational** — at any time.
+</Note>
+
+## Firestore path
+
+All plantas are stored as documents in the following subcollection:
+
+```
+warehouses/GENERAL/plantas
+```
+
+The list is always fetched ordered by `numericId` ascending.
+
+## Navigating to plantas
+
+Go to `/plantas` in the application. The page shows a table of all registered facilities sorted by their numeric ID.
+
+## Operations
+
+<AccordionGroup>
+  <Accordion title="View all plantas">
+    The page loads all plantas from Firestore on mount, ordered by **numericId** ascending. The table displays each plant's **code**, **name**, **plantName**, **location**, **maxPallets**, **tempRange**, **isOperational**, and available actions.
+  </Accordion>
+
+  <Accordion title="Create a new planta">
+    <Steps>
+      <Step title="Open the form">
+        Click the **Nueva Planta** button in the top-right corner of the page.
+      </Step>
+      <Step title="Fill in the facility details">
+        Provide all of the following fields:
+
+        - **name** — the legal company name (razón social)
+        - **plantName** — the physical name of the facility
+        - **location** — city or logistics zone
+        - **maxPallets** — total pallet position capacity
+        - **tempRange** — thermal operating range (e.g., `-20°C a 5°C`)
+        - **isOperational** — whether the plant is currently active
+
+        The **numericId**, **code**, and **createdAt** are assigned automatically.
+      </Step>
+      <Step title="Save">
+        Submit the form. The service queries the highest existing **numericId**, increments it by 1, generates the corresponding base-36 **code**, records the current timestamp as **createdAt**, and writes the new document to `warehouses/GENERAL/plantas`.
+      </Step>
+    </Steps>
+  </Accordion>
+
+  <Accordion title="Edit a planta">
+    <Steps>
+      <Step title="Open the edit form">
+        Click the edit action on the row you want to modify. The form pre-fills with the plant's current values.
+      </Step>
+      <Step title="Update the fields">
+        You can change any of the following: **name**, **plantName**, **location**, **maxPallets**, **tempRange**, and **isOperational**.
+      </Step>
+      <Step title="Save">
+        Submit the form. The service writes only the editable fields to Firestore. **code**, **numericId**, and **id** are never included in the update payload.
+      </Step>
+    </Steps>
+  </Accordion>
+
+  <Accordion title="Toggle operational status">
+    The **isOperational** flag controls whether a plant appears as active in the system. You can update it at any time through the edit form without affecting any other fields.
+
+    <Tip>
+      Use **isOperational** to temporarily deactivate a plant for maintenance without deleting its record and losing its code and history.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="Delete a planta">
+    Click the delete action on the row. A confirmation dialog asks you to confirm permanent deletion. Once confirmed, the Firestore document is removed from `warehouses/GENERAL/plantas` and the list refreshes automatically.
+
+    <Warning>
+      Deletion is permanent. There is no soft-delete or recovery mechanism. Consider setting **isOperational** to `false` instead if you may need the record again.
+    </Warning>
+  </Accordion>
+</AccordionGroup>

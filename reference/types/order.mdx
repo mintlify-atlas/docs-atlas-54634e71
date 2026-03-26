@@ -1,0 +1,269 @@
+---
+title: "Order"
+description: "BodegaOrder represents a work instruction to move or inspect a box in the warehouse."
+keywords: ["order", "BodegaOrder", "OrderType", "OrderSource", "a_bodega", "a_salida", "revisar", "types"]
+---
+
+A `BodegaOrder` is a work instruction issued to an operario directing them to move a box between zones or flag a position for inspection. Orders are the core mechanism for tracking warehouse activity and generating overdue alerts.
+
+## Type definitions
+
+```typescript
+export type OrderType = "a_bodega" | "a_salida" | "revisar";
+
+export type OrderSource = "ingresos" | "bodega" | "salida";
+
+export type BodegaOrder = {
+  id: string;
+  type: OrderType;
+  sourcePosition: number;
+  sourceZone: OrderSource;
+  targetPosition?: number;
+  createdAt: string;
+  createdAtMs: number;
+  createdBy: Role;
+  client?: string;
+  autoId?: string;
+  boxName?: string;
+};
+```
+
+## Fields
+
+<ResponseField name="id" type="string" required>
+  Unique order identifier. Generated with `crypto.randomUUID()` when available, falling back to `orden-{Date.now()}-{rand}` in environments where the Web Crypto API is unavailable.
+</ResponseField>
+
+<ResponseField name="type" type="OrderType" required>
+  The kind of work this order instructs. One of:
+  - `"a_bodega"` — move a box into a bodega slot
+  - `"a_salida"` — move a box to the outbound zone
+  - `"revisar"` — flag a position for inspection
+</ResponseField>
+
+<ResponseField name="sourcePosition" type="number" required>
+  The position number of the box in its current (`sourceZone`) zone.
+</ResponseField>
+
+<ResponseField name="sourceZone" type="OrderSource" required>
+  The zone where the box currently resides. One of `"ingresos"`, `"bodega"`, or `"salida"`.
+</ResponseField>
+
+<ResponseField name="targetPosition" type="number">
+  The destination position for `a_bodega` and `a_salida` orders. Not set (`undefined`) for `revisar` orders since no movement is required.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string" required>
+  Human-readable timestamp string of when the order was created, for display in the UI.
+</ResponseField>
+
+<ResponseField name="createdAtMs" type="number" required>
+  Order creation time in epoch milliseconds. Used to calculate whether an order is overdue: any order where `Date.now() - createdAtMs > 120000` (2 minutes) generates an alert.
+</ResponseField>
+
+<ResponseField name="createdBy" type="Role" required>
+  The role of the user who created this order. See [Role](#role) for the full list of valid roles.
+</ResponseField>
+
+<ResponseField name="client" type="string">
+  Optional client ID filter. When set, this order pertains to a box belonging to the specified client.
+</ResponseField>
+
+<ResponseField name="autoId" type="string">
+  Optional reference to the `Box.autoId` (format: `BOX-YYYYMMDD-NNN`) of the box involved in this order.
+</ResponseField>
+
+<ResponseField name="boxName" type="string">
+  Optional human-readable name of the box referenced by this order.
+</ResponseField>
+
+## Order type semantics
+
+Each `OrderType` value describes a specific movement or action:
+
+<AccordionGroup>
+  <Accordion title="a_bodega — move box into bodega">
+    Instructs an operario to take a box from either `ingresos` or `salida` and place it into the bodega slot at `targetPosition`.
+
+    Valid source zones: `"ingresos"`, `"salida"`
+
+    `targetPosition` is always set for this order type.
+  </Accordion>
+
+  <Accordion title="a_salida — move box to outbound">
+    Instructs an operario to take a box from `ingresos` or `bodega` and move it to the salida (outbound) zone at `targetPosition`.
+
+    Valid source zones: `"ingresos"`, `"bodega"`
+
+    `targetPosition` is always set for this order type.
+  </Accordion>
+
+  <Accordion title="revisar — inspect a position">
+    Flags a specific box position for manual inspection without requiring a physical move. Used to escalate temperature anomalies or condition concerns.
+
+    Valid source zones: `"ingresos"`, `"bodega"`, `"salida"`
+
+    `targetPosition` is `undefined` for this order type.
+  </Accordion>
+</AccordionGroup>
+
+## Overdue rule
+
+<Warning>
+  An order is considered overdue when `Date.now() - createdAtMs > 120_000` (more than 2 minutes have elapsed since creation). Overdue orders automatically generate an `AlertItem` that appears in `CloudWarehouseState.alerts`.
+</Warning>
+
+---
+
+## Role
+
+`Role` represents the set of permission levels a user can hold in the system.
+
+```typescript
+export type Role = "custodio" | "administrador" | "operario" | "jefe" | "cliente" | "configurador";
+```
+
+| Value | Description |
+|---|---|
+| `"custodio"` | Custodian with day-to-day warehouse oversight. |
+| `"administrador"` | Full administrative access. |
+| `"operario"` | Warehouse operator who executes orders. |
+| `"jefe"` | Supervisor who can assign alerts and review operations. |
+| `"cliente"` | Client-facing role with read access scoped to their own boxes. |
+| `"configurador"` | System configurator with access to warehouse setup. |
+
+---
+
+## AlertItem
+
+`AlertItem` represents an active alert in the system, typically generated by an overdue order or a temperature anomaly.
+
+```typescript
+export type AlertReason = "no_tuve_tiempo" | "no_quise" | "no_pude";
+
+export type AlertItem = {
+  id: string;
+  title: string;
+  description: string;
+  reason?: AlertReason;
+  sourceOrderId?: string;
+  meta?: string;
+  createdAt?: string;
+};
+```
+
+<ResponseField name="id" type="string" required>
+  Unique alert identifier.
+</ResponseField>
+
+<ResponseField name="title" type="string" required>
+  Short title displayed in the alert list.
+</ResponseField>
+
+<ResponseField name="description" type="string" required>
+  Full description of what triggered the alert.
+</ResponseField>
+
+<ResponseField name="reason" type="AlertReason">
+  The operario-reported reason for not completing the order on time. One of:
+  - `"no_tuve_tiempo"` — did not have time
+  - `"no_quise"` — chose not to
+  - `"no_pude"` — was unable to
+</ResponseField>
+
+<ResponseField name="sourceOrderId" type="string">
+  ID of the `BodegaOrder` that triggered this alert, if applicable.
+</ResponseField>
+
+<ResponseField name="meta" type="string">
+  Optional serialized metadata string for additional context.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  Human-readable timestamp string of when the alert was created.
+</ResponseField>
+
+---
+
+## AlertAssignment
+
+`AlertAssignment` records that an alert has been assigned to a responsible party for resolution.
+
+```typescript
+export type AlertAssignment = {
+  alertId: string;
+  kind: "temperatura" | "reporte" | "otro";
+  assignedAt: string;
+  assignedBy: string;
+  sourceOrderId?: string;
+  position?: number;
+};
+```
+
+<ResponseField name="alertId" type="string" required>
+  ID of the `AlertItem` this assignment refers to.
+</ResponseField>
+
+<ResponseField name="kind" type="string" required>
+  Category of the alert. One of:
+  - `"temperatura"` — temperature-related issue
+  - `"reporte"` — general report or observation
+  - `"otro"` — other / uncategorized
+</ResponseField>
+
+<ResponseField name="assignedAt" type="string" required>
+  Human-readable timestamp string of when the assignment was made.
+</ResponseField>
+
+<ResponseField name="assignedBy" type="string" required>
+  User ID of the person (typically a `jefe`) who made the assignment.
+</ResponseField>
+
+<ResponseField name="sourceOrderId" type="string">
+  ID of the originating `BodegaOrder`, if the alert came from an overdue order.
+</ResponseField>
+
+<ResponseField name="position" type="number">
+  The warehouse position number associated with this alert, if applicable.
+</ResponseField>
+
+---
+
+## AlertHistoryEntry
+
+`AlertHistoryEntry` is the archived record of a resolved alert, stored in the history document.
+
+```typescript
+export type AlertHistoryEntry = {
+  id: string;
+  title: string;
+  description: string;
+  createdAt: string;
+  createdAtMs: number;
+  meta?: string;
+};
+```
+
+<ResponseField name="id" type="string" required>
+  Unique identifier for this history entry.
+</ResponseField>
+
+<ResponseField name="title" type="string" required>
+  Short title of the original alert.
+</ResponseField>
+
+<ResponseField name="description" type="string" required>
+  Full description of the alert that was resolved.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string" required>
+  Human-readable timestamp string of when the original alert was created.
+</ResponseField>
+
+<ResponseField name="createdAtMs" type="number" required>
+  Creation timestamp in epoch milliseconds. Used to sort and filter history entries by time.
+</ResponseField>
+
+<ResponseField name="meta" type="string">
+  Optional serialized metadata string carried over from the original `AlertItem`.
+</ResponseField>

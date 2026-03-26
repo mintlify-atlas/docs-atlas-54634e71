@@ -1,0 +1,80 @@
+---
+title: 'Firebase setup'
+description: 'Create and configure a Firebase project for Bodega de Frío, including Firestore, Authentication, and security rules.'
+keywords: ['firebase', 'firestore', 'authentication', 'setup', 'configuration']
+---
+
+Bodega de Frío uses Firebase for its database (Firestore), user authentication, and file storage. Follow these steps to create and wire up a Firebase project before running the app.
+
+<Steps>
+  <Step title="Create a Firebase project">
+    Go to [console.firebase.google.com](https://console.firebase.google.com) and click **Add project**. Give the project a name, choose your Google Analytics preference, and click **Create project**.
+  </Step>
+
+  <Step title="Enable Firestore Database">
+    In the Firebase console, navigate to **Build → Firestore Database** and click **Create database**. Choose **Production mode** (you will deploy your own security rules) and select a region close to your users, then click **Enable**.
+  </Step>
+
+  <Step title="Enable Authentication with Email/Password">
+    Navigate to **Build → Authentication** and click **Get started**. Under the **Sign-in method** tab, select **Email/Password**, toggle the provider to **Enabled**, and save.
+  </Step>
+
+  <Step title="Register a web app and copy the config">
+    From the project overview page, click the **Web** icon (`</>`) to register a new web app. Give it a nickname (for example, `bodega-de-frio`) and click **Register app**.
+
+    Firebase displays a `firebaseConfig` object. Copy the values — you will paste them into your `.env.local` file in the next step.
+
+    ```javascript
+    const firebaseConfig = {
+      apiKey: "...",
+      authDomain: "your-project.firebaseapp.com",
+      projectId: "your-project-id",
+      storageBucket: "your-project.appspot.com",
+      messagingSenderId: "000000000000",
+      appId: "1:000000000000:web:..."
+    };
+    ```
+
+    Each of these values maps directly to a `NEXT_PUBLIC_FIREBASE_*` environment variable. See [Environment variables](/configuration/environment-variables) for the full list.
+  </Step>
+
+  <Step title="Deploy Firestore security rules">
+    The app ships with a `firestore.rules` file that scopes access by authentication status. Deploy it before going live. See [Firestore security rules](/configuration/firestore-rules) for the exact rules and deployment instructions.
+  </Step>
+</Steps>
+
+## Firestore collections
+
+The app reads from and writes to the following top-level Firestore collections:
+
+| Collection | Purpose |
+|---|---|
+| `warehouses` | One document per warehouse; subcollections hold operational state and history (`state/main`, `state/history`) |
+| `clientes` | Client catalog managed by users with the configurador role |
+| `usuarios` | Configuration-level user records (separate from Firebase Auth profiles) |
+| `users` | Per-user profile documents; each user can only read and write their own document |
+
+## Secondary Firebase app for user creation
+
+When an admin creates a new user, the app needs to call `createUserWithEmailAndPassword` without signing out the currently logged-in admin. To do this, `lib/firebaseClient.ts` initialises a second Firebase app instance named `"Secondary"` using the same config:
+
+```typescript
+export const getSecondaryAuth = () => {
+  const secondaryApp =
+    getApps().find((item) => item.name === "Secondary") ??
+    initializeApp(firebaseConfig, "Secondary");
+  return getAuth(secondaryApp);
+};
+```
+
+No extra Firebase project or credentials are needed for this — it reuses the same `NEXT_PUBLIC_FIREBASE_*` values.
+
+## Fridem external integration
+
+Bodega de Frío optionally connects to an external **Fridem** service, which is itself a separate Firebase project. The integration is initialised in `lib/fridemClient.ts` and requires its own set of `NEXT_PUBLIC_FRIDEM_*` environment variables.
+
+<Note>
+  The Fridem integration is optional. If the Fridem environment variables are not set, `fridemDb`, `fridemDatabase`, and `fridemAuth` all resolve to `null` and the integration is silently skipped.
+</Note>
+
+See [Environment variables](/configuration/environment-variables) for the complete list of Fridem variables.

@@ -1,0 +1,101 @@
+---
+title: "Warehouse management"
+description: "Create, switch between, and manage cold storage warehouses in Bodega de Frío."
+---
+
+Bodega de Frío organizes all slot and order data under individual warehouse records stored in Firestore. Each warehouse is an independent namespace — switching warehouses reloads slots, boxes, orders, alerts, and stats from scratch.
+
+## Creating a warehouse
+
+Users with the **configurador** or **administrador** role can create warehouses. The form accepts two inputs:
+
+- **Name** — a human-readable label for the warehouse (e.g. `Zona Norte`).
+- **Capacity** — an optional integer representing the planned maximum number of slots.
+
+<Steps>
+  <Step title="Open the Configuration tab">
+    Log in as a **configurador** and navigate to the **Configuración** tab in the dashboard.
+  </Step>
+  <Step title="Fill in the warehouse form">
+    Enter a name in the warehouse name field. Optionally enter a numeric capacity. The capacity defaults to `0` if omitted or invalid.
+  </Step>
+  <Step title="Submit">
+    Click the create button. The `handleCreateWarehouse` action calls `addDoc` on the `warehouses` Firestore collection, then immediately initializes the warehouse's `state/main` and `state/history` sub-documents via `ensureWarehouseState` and `ensureHistoryState`.
+  </Step>
+  <Step title="Automatic switch">
+    After creation the dashboard automatically switches to the new warehouse so you can start registering boxes right away.
+  </Step>
+</Steps>
+
+<Note>
+  You must be signed in to create a warehouse. Attempting to create one without a session returns the error "Debes iniciar sesión para crear bodegas."
+</Note>
+
+## Switching warehouses
+
+The **WarehouseSelector** component (visible to **administrador** users) renders a dropdown of all warehouses fetched from the `warehouses` Firestore collection. Selecting a warehouse triggers `handleSelectWarehouse`, which:
+
+1. Resets all local state (slots, boxes, orders, alerts, stats).
+2. Updates `warehouseId` in component state.
+3. Subscribes to the new warehouse's Firestore document via `subscribeWarehouseState`.
+
+```typescript
+// Switching warehouse resets all live state
+const handleSelectWarehouse = (id: string) => {
+  setSlots(createInitialSlots());
+  setInboundBoxes([]);
+  setOutboundBoxes([]);
+  setOrders([]);
+  setStats(defaultStats);
+  setWarehouseId(id);
+};
+```
+
+## Warehouse metadata
+
+Each warehouse document in `warehouses/{warehouseId}` contains the following fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Firestore document ID |
+| `name` | `string` | Display name |
+| `status` | `string` | Lifecycle status (e.g. `active`, `external`) |
+| `capacity` | `number` | Planned slot capacity |
+| `disabled` | `boolean` | Whether the warehouse is currently deactivated |
+| `createdAt` | Firestore Timestamp | Creation date |
+| `disabledAt` | Firestore Timestamp | Date the warehouse was disabled, if applicable |
+
+## Enabling and disabling a warehouse
+
+The **configurador** can toggle a warehouse on or off using the enable/disable button in the Configuration panel. This calls `toggleWarehouseDisabled`, which writes `disabled: true` (or `false`) and a `disabledAt` server timestamp to the warehouse document.
+
+```typescript
+await updateDoc(doc(db, "warehouses", warehouseId), {
+  disabled: nextDisabled,
+  disabledAt: nextDisabled ? serverTimestamp() : null,
+});
+```
+
+<Warning>
+  Disabling a warehouse does not delete its data. Slots, boxes, orders, and history remain in Firestore and can be accessed again by re-enabling the warehouse.
+</Warning>
+
+## Firestore location
+
+All warehouse data lives under the following path:
+
+```
+warehouses/{warehouseId}/
+  state/main      ← live operational state
+  state/history   ← historical ingresos, salidas, movimientos, alertas
+```
+
+## The Fridem external warehouse
+
+The warehouse list always includes an entry named **Prueba** (internal ID `x7T7rQc7hmTXxJ5df27B`). This is a read-only external warehouse integrated via the `fetchFridemSlots` function.
+
+<Info>
+  When the Fridem warehouse is selected, the dashboard calls `fetchFridemSlots` instead of subscribing to Firestore. No orders, stats, or alerts are loaded — only the slot grid is populated. Write operations are disabled for this warehouse.
+</Info>
+
+To configure the Fridem connection set the `NEXT_PUBLIC_FRIDEM_DATABASE_URL` environment variable to the Firebase Realtime Database URL of the external system.

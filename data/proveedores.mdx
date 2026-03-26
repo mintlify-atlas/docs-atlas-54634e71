@@ -1,0 +1,126 @@
+---
+title: 'Proveedores'
+description: 'Managing suppliers (proveedores) registered in the system.'
+keywords: ['proveedores', 'suppliers', 'providers', 'data management', 'cold storage']
+---
+
+A **proveedor** (supplier) is a company or logistics partner tracked in Bodega de Frío. Proveedores follow the same identity pattern as [compradores](/data/compradores) — each receives a permanent, auto-assigned base-36 code on creation.
+
+## Data model
+
+```typescript
+export interface Provider {
+  id?: string;        // Firestore document ID
+  numericId: number;  // Auto-increment integer
+  code: string;       // Base-36 encoded, 4-character padded
+  name: string;
+  createdAt: number;  // Unix timestamp (ms)
+}
+```
+
+### Field reference
+
+| Field | Type | Description |
+|---|---|---|
+| **id** | `string` | Firestore document ID, assigned by Firebase on creation. |
+| **numericId** | `number` | Auto-incremented integer. Determined by querying the highest existing `numericId` and adding 1. |
+| **code** | `string` | Base-36 encoding of `numericId`, zero-padded to 4 characters. |
+| **name** | `string` | Display name of the supplier. The only field you can update after creation. |
+| **createdAt** | `number` | Unix timestamp in milliseconds recorded at creation. |
+
+### How the code system works
+
+The **code** field uses the same base-36 encoding scheme as compradores: the **numericId** is converted to base 36 and padded to 4 characters.
+
+```
+numericId  →  code
+1          →  0001
+10         →  000A
+35         →  000Z
+36         →  0010
+```
+
+<Tip>
+Since proveedores and compradores each have their own independent sequences, both can have a `code` of `0001` — these are in separate Firestore subcollections and do not conflict.
+</Tip>
+
+## Firestore path
+
+All proveedores are stored as documents in the following subcollection:
+
+```
+warehouses/GENERAL/providers
+```
+
+The list is always fetched ordered by `numericId` ascending.
+
+<Note>
+Note that the Firestore subcollection name is `providers` (English), even though the UI and route use the Spanish term `proveedores`.
+</Note>
+
+## Navigating to proveedores
+
+Go to `/proveedores` in the application. The page shows a table of all registered suppliers sorted by their numeric ID.
+
+## Operations
+
+<AccordionGroup>
+  <Accordion title="View all proveedores">
+    The page loads all providers from Firestore on mount, ordered by **numericId** ascending. The table displays each supplier's **code**, **name**, and available actions.
+  </Accordion>
+
+  <Accordion title="Create a new proveedor">
+    <Steps>
+      <Step title="Open the form">
+        Click the **Nuevo Proveedor** button in the top-right corner of the page.
+      </Step>
+      <Step title="Enter the name">
+        Type the supplier's name in the form field. The **numericId** and **code** are assigned automatically — you only provide the **name**.
+      </Step>
+      <Step title="Save">
+        Submit the form. The service queries the highest existing **numericId**, increments it by 1, generates the corresponding base-36 **code**, and writes the new document to `warehouses/GENERAL/providers`.
+      </Step>
+    </Steps>
+  </Accordion>
+
+  <Accordion title="Edit a proveedor">
+    <Steps>
+      <Step title="Open the edit form">
+        Click the edit action on the row you want to modify. The form pre-fills with the supplier's current **name**.
+      </Step>
+      <Step title="Update the name">
+        Change the **name** field. No other fields are editable.
+      </Step>
+      <Step title="Save">
+        Submit the form. Only the **name** is written to Firestore — **code** and **numericId** remain unchanged.
+      </Step>
+    </Steps>
+
+    <Note>
+      The update operation explicitly strips **code** and **numericId** from any update payload, ensuring the identity sequence stays intact.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Delete a proveedor">
+    Click the delete action on the row. A confirmation dialog asks you to confirm permanent deletion. Once confirmed, the Firestore document is removed from `warehouses/GENERAL/providers` and the list refreshes automatically.
+
+    <Warning>
+      Deletion is permanent. There is no soft-delete or recovery mechanism.
+    </Warning>
+  </Accordion>
+</AccordionGroup>
+
+## Shared pattern with compradores
+
+Proveedores and compradores share the same data shape and service pattern:
+
+<CardGroup cols={2}>
+  <Card title="Compradores" icon="user" href="/data/compradores">
+    Buyers tracked in `warehouses/GENERAL/compradores`.
+  </Card>
+  <Card title="Proveedores" icon="truck" href="/data/proveedores">
+    Suppliers tracked in `warehouses/GENERAL/providers`.
+  </Card>
+</CardGroup>
+
+Both use auto-increment numeric IDs, base-36 codes, and restrict updates to **name** only.

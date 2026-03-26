@@ -1,0 +1,179 @@
+---
+title: "ProviderService"
+description: "CRUD service for managing suppliers (proveedores) in Firestore."
+---
+
+`ProviderService` manages supplier records using the same base-36 auto-ID pattern as `CompradorService`. Each provider receives a monotonically increasing `numericId` and a derived uppercase base-36 `code` on creation.
+
+## Firestore path
+
+```
+warehouses/GENERAL/providers/{documentId}
+```
+
+## Provider type
+
+```typescript
+export interface Provider {
+  id?: string;       // Firestore document ID (populated after reads)
+  numericId: number; // Auto-incremented integer
+  code: string;      // Base-36 string, 4 characters, uppercase
+  name: string;
+  createdAt: number; // Unix timestamp in milliseconds
+}
+```
+
+<ResponseField name="id" type="string">
+  Firestore document ID. Set automatically on read; absent on write objects.
+</ResponseField>
+
+<ResponseField name="numericId" type="number">
+  Monotonically increasing integer assigned at creation time. Immutable after creation.
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Base-36 representation of `numericId`, uppercase, left-padded to 4 characters. For example, `numericId` 1 → `"0001"`, 10 → `"000A"`. Immutable after creation.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Display name of the supplier. The only mutable field after creation.
+</ResponseField>
+
+<ResponseField name="createdAt" type="number">
+  Unix timestamp (milliseconds) recorded at creation via `Date.now()`.
+</ResponseField>
+
+---
+
+## Methods
+
+### ProviderService.toBase36
+
+```typescript
+toBase36(num: number): string
+```
+
+Converts a positive integer to an uppercase base-36 string padded to a minimum of 4 characters. Shares the same implementation as `CompradorService.toBase36`.
+
+<ParamField path="num" type="number" required>
+  The integer to convert. Used internally with `numericId` values.
+</ParamField>
+
+<ResponseField name="returns" type="string">
+  Uppercase base-36 string, at least 4 characters long. For example: `1` → `"0001"`, `10` → `"000A"`, `35` → `"000Z"`, `36` → `"0010"`.
+</ResponseField>
+
+---
+
+### ProviderService.getAll
+
+```typescript
+async getAll(): Promise<Provider[]>
+```
+
+Fetches all providers from Firestore ordered by `numericId` ascending.
+
+<ResponseField name="returns" type="Promise<Provider[]>">
+  Resolves with an array of providers sorted by `numericId` ascending. Returns an empty array on error — the method never rejects.
+</ResponseField>
+
+```typescript
+import { ProviderService } from "@/app/services/providerService";
+
+const providers = await ProviderService.getAll();
+// [{ id: "abc", numericId: 1, code: "0001", name: "Proveedor A", createdAt: 1700000000000 }, ...]
+```
+
+<Note>
+  On error, `getAll` logs to `console.error` and returns `[]` instead of throwing. Check the browser console if you receive an unexpectedly empty array.
+</Note>
+
+---
+
+### ProviderService.create
+
+```typescript
+async create(name: string): Promise<DocumentReference>
+```
+
+Creates a new provider with an auto-incremented `numericId` and a derived `code`. The method queries the collection for the current highest `numericId`, increments it by 1, and writes the new document.
+
+<ParamField path="name" type="string" required>
+  Display name of the supplier. Leading and trailing whitespace is trimmed automatically.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<DocumentReference>">
+  Resolves with the Firestore `DocumentReference` for the newly created document.
+</ResponseField>
+
+```typescript
+import { ProviderService } from "@/app/services/providerService";
+
+const ref = await ProviderService.create("Importadora Central");
+console.log(ref.id); // Firestore document ID
+```
+
+<Tip>
+  If no providers exist yet, the first record receives `numericId: 1` and `code: "0001"`.
+</Tip>
+
+---
+
+### ProviderService.update
+
+```typescript
+async update(id: string, data: Partial<Provider>): Promise<void>
+```
+
+Updates a provider document. Only the `name` field is written to Firestore; `code` and `numericId` are explicitly excluded to preserve sequence integrity.
+
+<ParamField path="id" type="string" required>
+  The Firestore document ID of the provider to update.
+</ParamField>
+
+<ParamField path="data" type="Partial<Provider>" required>
+  Update payload. Only `data.name` is applied to the Firestore document.
+</ParamField>
+
+```typescript
+await ProviderService.update("firestoreDocId", { name: "Nuevo Proveedor" });
+```
+
+<Warning>
+  Only `name` is written. Passing `code` or `numericId` in `data` has no effect — they are stripped before the Firestore call.
+</Warning>
+
+---
+
+### ProviderService.delete
+
+```typescript
+async delete(id: string): Promise<void>
+```
+
+Deletes a provider document from Firestore by its document ID.
+
+<ParamField path="id" type="string" required>
+  The Firestore document ID of the provider to delete.
+</ParamField>
+
+```typescript
+await ProviderService.delete("firestoreDocId");
+```
+
+<Warning>
+  Deletion is permanent. `numericId` values are not recycled, so deleting a provider creates a permanent gap in the numeric sequence.
+</Warning>
+
+---
+
+## Shared pattern with CompradorService
+
+`ProviderService` and `CompradorService` share an identical auto-ID strategy:
+
+1. Query the collection ordered by `numericId` descending with `limit(1)` to find the current maximum.
+2. Increment by 1 (defaulting to `1` when the collection is empty).
+3. Compute `code` via `toBase36(nextId)`.
+4. Write `numericId`, `code`, `name`, and `createdAt` in a single `addDoc` call.
+
+This means both collections maintain independent sequences. A provider with `numericId: 5` and a comprador with `numericId: 5` can coexist without conflict.

@@ -1,0 +1,109 @@
+---
+title: 'Compradores'
+description: 'Managing buyers (compradores) registered in the system.'
+keywords: ['compradores', 'buyers', 'data management', 'cold storage']
+---
+
+A **comprador** is a buyer or purchasing entity tracked in Bodega de Frío. Each comprador receives a permanent, auto-assigned code that identifies them across the warehouse management system.
+
+## Data model
+
+```typescript
+export interface Comprador {
+  id?: string;        // Firestore document ID
+  numericId: number;  // Auto-increment integer
+  code: string;       // Base-36 encoded, 4-character padded
+  name: string;
+  createdAt: number;  // Unix timestamp (ms)
+}
+```
+
+### Field reference
+
+| Field | Type | Description |
+|---|---|---|
+| **id** | `string` | Firestore document ID, assigned by Firebase on creation. |
+| **numericId** | `number` | Auto-incremented integer. Determined by querying the highest existing `numericId` and adding 1. |
+| **code** | `string` | Base-36 encoding of `numericId`, zero-padded to 4 characters (see below). |
+| **name** | `string` | Display name of the buyer. The only field you can update after creation. |
+| **createdAt** | `number` | Unix timestamp in milliseconds recorded at creation. |
+
+### How the code system works
+
+Each comprador's **code** is the base-36 representation of its **numericId**, padded to 4 characters with leading zeros.
+
+```
+numericId  →  code
+1          →  0001
+10         →  000A
+35         →  000Z
+36         →  0010
+```
+
+This encoding keeps codes short and human-readable while supporting tens of millions of unique entries.
+
+<Note>
+The **code** and **numericId** are immutable once created. Only **name** can be updated. This preserves referential integrity across the rest of the system.
+</Note>
+
+## Firestore path
+
+All compradores are stored as documents in the following subcollection:
+
+```
+warehouses/GENERAL/compradores
+```
+
+The list is always fetched ordered by `numericId` ascending.
+
+## Navigating to compradores
+
+Go to `/compradores` in the application. The page shows a full table of registered buyers sorted by their numeric ID.
+
+## Operations
+
+<AccordionGroup>
+  <Accordion title="View all compradores">
+    The page loads all compradores from Firestore on mount, ordered by **numericId** ascending. The table displays each buyer's **code**, **name**, and available actions.
+  </Accordion>
+
+  <Accordion title="Create a new comprador">
+    <Steps>
+      <Step title="Open the form">
+        Click the **Nuevo Comprador** button in the top-right corner of the page.
+      </Step>
+      <Step title="Enter the name">
+        Type the buyer's name in the form field. The **numericId** and **code** are assigned automatically — you only provide the **name**.
+      </Step>
+      <Step title="Save">
+        Submit the form. The service queries the highest existing **numericId**, increments it by 1, generates the corresponding base-36 **code**, and writes the new document to `warehouses/GENERAL/compradores`.
+      </Step>
+    </Steps>
+  </Accordion>
+
+  <Accordion title="Edit a comprador">
+    <Steps>
+      <Step title="Open the edit form">
+        Click the edit action on the row you want to modify. The form pre-fills with the comprador's current **name**.
+      </Step>
+      <Step title="Update the name">
+        Change the **name** field. No other fields are editable.
+      </Step>
+      <Step title="Save">
+        Submit the form. Only the **name** is written to Firestore — **code** and **numericId** remain unchanged.
+      </Step>
+    </Steps>
+
+    <Note>
+      The update operation explicitly restricts changes to **name** only. Attempts to modify **code** or **numericId** through the service are ignored.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Delete a comprador">
+    Click the delete action on the row. A confirmation dialog appears asking you to confirm permanent deletion. Once confirmed, the Firestore document is removed from `warehouses/GENERAL/compradores` and the list refreshes automatically.
+
+    <Warning>
+      Deletion is permanent. There is no soft-delete or recovery mechanism.
+    </Warning>
+  </Accordion>
+</AccordionGroup>

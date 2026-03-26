@@ -1,97 +1,61 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Bodega de Frío"
+description: "Cold storage warehouse management platform — real-time tracking of slots, temperatures, orders, and alerts across multiple warehouses."
 ---
 
-## Setting up
+Bodega de Frío is a multi-role cold storage management system built with Next.js and Firebase. It gives your team a real-time view of every warehouse slot, tracks inbound and outbound box flows, monitors temperatures, and triggers alerts automatically — all synchronized across sessions through Firestore.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Set up your environment and log in for the first time in minutes.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand how warehouses, zones, and Firestore state fit together.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="User Roles" icon="users" href="/roles/overview">
+    Learn about the six roles and what each can do in the platform.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Core Features" icon="snowflake" href="/features/warehouse-management">
+    Explore warehouse management, order flows, alerts, and reports.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What Bodega de Frío does
 
-Everything you need to create world-class documentation.
+<Steps>
+  <Step title="Manage warehouses and slots">
+    Create multiple warehouses, each with a configurable number of cold storage slots. Each slot tracks which box occupies it, the stored item's name, temperature, and client assignment.
+  </Step>
+  <Step title="Track inbound, storage, and outbound flows">
+    Boxes move through three zones — **Ingresos** (inbound), **Bodega** (storage), and **Salida** (outbound). Operators and supervisors issue orders to move boxes between zones, and the system queues pending work in real time.
+  </Step>
+  <Step title="Monitor temperatures and respond to alerts">
+    Any box whose temperature exceeds 5 °C triggers an automatic alert. Supervisors assign alerts to operators, who resolve them and log the outcome. Overdue orders (pending more than 2 minutes) also raise alerts automatically.
+  </Step>
+  <Step title="Generate reports and audit history">
+    Every ingreso, salida, and bodega movement is recorded in a history log. The Reportes section lets authorized users export activity summaries as PDF for compliance and auditing.
+  </Step>
+</Steps>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Key capabilities
 
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<CardGroup cols={2}>
+  <Card title="Multi-warehouse support" icon="warehouse">
+    Switch between internal and external warehouses (including Fridem integration) from a single dashboard.
+  </Card>
+  <Card title="Role-based access" icon="shield-halved">
+    Six distinct roles — custodio, administrador, operario, jefe, cliente, and configurador — control what each user can see and do.
+  </Card>
+  <Card title="Real-time sync" icon="rotate">
+    All warehouse state is synchronized via Firestore listeners, so every connected session sees the same data instantly.
+  </Card>
+  <Card title="Temperature alerts" icon="temperature-high">
+    Automatic alerts fire when any box exceeds the 5 °C threshold, with assignment and resolution tracking.
+  </Card>
+  <Card title="Order queue" icon="list-check">
+    Supervisors issue move and review orders; operators see their task queue live and complete orders step by step.
+  </Card>
+  <Card title="PDF reports" icon="file-pdf">
+    Export activity history and warehouse state summaries as PDF directly from the Reportes tab.
+  </Card>
+</CardGroup>

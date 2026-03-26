@@ -1,0 +1,253 @@
+---
+title: "Box"
+description: "The Box type represents a physical box or item moving through the inbound, outbound, or dispatched zones."
+keywords: ["box", "ingresos", "salida", "despachados", "types"]
+---
+
+A `Box` represents a physical box or item that exists in one of the three transit zones of the warehouse. Unlike a [`Slot`](/reference/types/slot), a `Box` always carries a concrete `temperature` value — it is never `null`.
+
+## Type definition
+
+```typescript
+export type Box = {
+  position: number;
+  autoId: string;
+  name: string;
+  temperature: number;
+  client: string;
+};
+```
+
+## Fields
+
+<ResponseField name="position" type="number" required>
+  The box's numeric position within its current zone (ingresos, salida, or despachados).
+</ResponseField>
+
+<ResponseField name="autoId" type="string" required>
+  Auto-generated identifier in the format `{PREFIX}-YYYYMMDD-NNN` (e.g., `CAJ-20260326-007` for inbound registrations). This ID travels with the box across all zones and links it to the bodega `Slot.autoId` when the box is stored.
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Human-readable name of the box or item.
+</ResponseField>
+
+<ResponseField name="temperature" type="number" required>
+  Current temperature of the box in degrees Celsius. Always a concrete number — boxes without a temperature reading cannot exist in transit zones.
+</ResponseField>
+
+<ResponseField name="client" type="string" required>
+  Client identifier string indicating which client owns this box.
+</ResponseField>
+
+## Box zones
+
+Boxes exist in exactly one zone at a time. The `CloudWarehouseState` tracks three distinct box arrays:
+
+| Zone field | Spanish name | Description |
+|---|---|---|
+| `inboundBoxes` | Ingresos | Boxes that have just arrived and are pending placement into bodega slots. |
+| `outboundBoxes` | Salida | Boxes that have been pulled from bodega and are awaiting dispatch. |
+| `dispatchedBoxes` | Despachados | Boxes that have been fully dispatched and are no longer active. |
+
+<Tip>
+  A box moves from `inboundBoxes` → bodega `Slot` via an `a_bodega` order, and from a bodega `Slot` → `outboundBoxes` via an `a_salida` order. Dispatched boxes land in `dispatchedBoxes` once the outbound process is complete.
+</Tip>
+
+---
+
+## Client
+
+`Client` represents an organization or individual whose boxes are managed by this warehouse.
+
+```typescript
+export type Client = {
+  id: string;
+  name: string;
+  code: string;
+  createdAt?: string;
+  createdAtMs?: number;
+  createdBy?: string | null;
+  createdByRole?: Role | null;
+  disabled?: boolean;
+  disabledAt?: string;
+};
+```
+
+<ResponseField name="id" type="string" required>
+  Firestore document ID for this client.
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Display name of the client.
+</ResponseField>
+
+<ResponseField name="code" type="string" required>
+  Short alphanumeric code used to identify the client in printed labels and reports.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  Human-readable timestamp string of when the client record was created.
+</ResponseField>
+
+<ResponseField name="createdAtMs" type="number">
+  Creation timestamp in epoch milliseconds.
+</ResponseField>
+
+<ResponseField name="createdBy" type="string | null">
+  User ID of the person who created this client record. `null` if created by the system.
+</ResponseField>
+
+<ResponseField name="createdByRole" type="Role | null">
+  Role of the user who created this record. See [Role](/reference/types/order#role) for the full list of valid roles.
+</ResponseField>
+
+<ResponseField name="disabled" type="boolean">
+  When `true`, the client is inactive and should not appear in active selection lists.
+</ResponseField>
+
+<ResponseField name="disabledAt" type="string">
+  Human-readable timestamp string of when the client was disabled.
+</ResponseField>
+
+---
+
+## ConfigUser
+
+`ConfigUser` represents a warehouse user account with an assigned role.
+
+```typescript
+export type ConfigUser = {
+  id: string;
+  name: string;
+  role: Role;
+  clientId?: string;
+  email?: string;
+  password?: string;
+  createdAt?: string;
+  createdAtMs?: number;
+  createdBy?: string | null;
+  createdByRole?: Role | null;
+  disabled?: boolean;
+  disabledAt?: string;
+};
+```
+
+<ResponseField name="id" type="string" required>
+  Firestore document ID for this user.
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Display name of the user.
+</ResponseField>
+
+<ResponseField name="role" type="Role" required>
+  The user's permission role. One of `"custodio"`, `"administrador"`, `"operario"`, `"jefe"`, `"cliente"`, or `"configurador"`.
+</ResponseField>
+
+<ResponseField name="clientId" type="string">
+  For users with the `"cliente"` role, this links the user to their specific `Client` record.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Login email address.
+</ResponseField>
+
+<ResponseField name="password" type="string">
+  UI-only convenience field used during user creation. Passwords are passed directly to Firebase Authentication and are **never stored in Firestore**. This field is always absent from documents in the `usuarios` collection.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  Human-readable timestamp string of when this user was created.
+</ResponseField>
+
+<ResponseField name="createdAtMs" type="number">
+  Creation timestamp in epoch milliseconds.
+</ResponseField>
+
+<ResponseField name="createdBy" type="string | null">
+  User ID of the person who created this account. `null` if created by the system.
+</ResponseField>
+
+<ResponseField name="createdByRole" type="Role | null">
+  Role of the user who created this account.
+</ResponseField>
+
+<ResponseField name="disabled" type="boolean">
+  When `true`, this user cannot log in.
+</ResponseField>
+
+<ResponseField name="disabledAt" type="string">
+  Human-readable timestamp string of when the user was disabled.
+</ResponseField>
+
+---
+
+## CloudWarehouseState
+
+`CloudWarehouseState` is the complete real-time state document stored in Firestore at `warehouses/{warehouseId}/state/main`. You subscribe to it using `subscribeWarehouseState` from `lib/bodegaCloudState.ts`.
+
+```typescript
+export type CloudWarehouseState = {
+  slots: Slot[];
+  inboundBoxes: Box[];
+  outboundBoxes: Box[];
+  dispatchedBoxes: Box[];
+  orders: BodegaOrder[];
+  stats: BodegaStats;
+  warehouseName: string;
+  alerts: AlertItem[];
+  assignedAlerts: AlertAssignment[];
+  alertasOperario: Array<{ position: number; [key: string]: unknown }>;
+  alertasOperarioSolved: number[];
+  llamadasJefe: Array<Record<string, unknown>>;
+};
+```
+
+<ResponseField name="slots" type="Slot[]" required>
+  Array of all bodega storage positions. Default warehouses have 12 slots.
+</ResponseField>
+
+<ResponseField name="inboundBoxes" type="Box[]" required>
+  Boxes in the ingresos (inbound) zone awaiting placement into bodega.
+</ResponseField>
+
+<ResponseField name="outboundBoxes" type="Box[]" required>
+  Boxes in the salida (outbound) zone awaiting dispatch.
+</ResponseField>
+
+<ResponseField name="dispatchedBoxes" type="Box[]" required>
+  Boxes that have been fully dispatched.
+</ResponseField>
+
+<ResponseField name="orders" type="BodegaOrder[]" required>
+  Active work orders currently assigned to operarios.
+</ResponseField>
+
+<ResponseField name="stats" type="BodegaStats" required>
+  Rolling operation counters. See [`BodegaStats`](/reference/types/slot#bodegastats).
+</ResponseField>
+
+<ResponseField name="warehouseName" type="string" required>
+  Display name of the warehouse, shown in the UI header.
+</ResponseField>
+
+<ResponseField name="alerts" type="AlertItem[]" required>
+  Active alerts awaiting assignment or resolution.
+</ResponseField>
+
+<ResponseField name="assignedAlerts" type="AlertAssignment[]" required>
+  Alerts that have been assigned to a responsible party.
+</ResponseField>
+
+<ResponseField name="alertasOperario" type="Array<{ position: number; [key: string]: unknown }>" required>
+  Positional alerts generated for operarios. Each entry includes at minimum a `position` number.
+</ResponseField>
+
+<ResponseField name="alertasOperarioSolved" type="number[]" required>
+  Array of position numbers for operario alerts that have been resolved.
+</ResponseField>
+
+<ResponseField name="llamadasJefe" type="Array<Record<string, unknown>>" required>
+  Log of supervisor call events.
+</ResponseField>

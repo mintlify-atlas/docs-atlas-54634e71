@@ -1,80 +1,93 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quick start"
+description: "Set up Bodega de Frío locally and log in for the first time."
 ---
 
-## Get started in three steps
+This guide takes you from a fresh clone to a running local instance connected to your Firebase project.
 
-Get your documentation site running locally and make your first customization.
+<Note>
+  Bodega de Frío requires a Firebase project with Firestore and Email/Password Authentication enabled. All users must be created by an administrator or configurador — there is no self-registration.
+</Note>
 
-### Step 1: Set up your local environment
+<Steps>
+  <Step title="Clone the repository and install dependencies">
+    ```bash
+    git clone https://github.com/eldani13/frio.git
+    cd frio
+    npm install
+    ```
+  </Step>
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Create a Firebase project">
+    1. Go to [console.firebase.google.com](https://console.firebase.google.com) and create a new project.
+    2. In **Build → Firestore Database**, create a database (start in test mode for development).
+    3. In **Build → Authentication**, enable the **Email/Password** sign-in provider.
+    4. In **Project settings → Your apps**, register a **Web app** and copy the Firebase config values.
 
-### Step 2: Deploy your changes
+    See [Firebase setup](/configuration/firebase-setup) for detailed instructions.
+  </Step>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+  <Step title="Configure environment variables">
+    Create a `.env.local` file at the project root:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```bash .env.local
+    NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
+    NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
+    NEXT_PUBLIC_WAREHOUSE_ID=default
+    ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    <Warning>Never commit `.env.local` to version control.</Warning>
 
-### Step 3: Go live
+    See [Environment variables](/configuration/environment-variables) for the full variable reference including optional Fridem integration variables.
+  </Step>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  <Step title="Start the development server">
+    ```bash
+    npm run dev
+    ```
+
+    Open [http://localhost:3000](http://localhost:3000) in your browser.
+  </Step>
+
+  <Step title="Log in and explore the dashboard">
+    You will see the login screen. Enter the email and password of a user that has been created in Firebase Authentication and has a corresponding profile document in Firestore (`users/{uid}` or `usuarios/{uid}` with a `role` field).
+
+    After logging in:
+    1. The **WarehouseSelector** appears — choose a warehouse from the list (a `default` warehouse is created automatically if none exists).
+    2. Use the dashboard tabs to navigate: **Estado**, **Ingresos**, **Salida**, **Órdenes**, **Despachados**, **Reportes**, and **Configuración** (available tabs depend on your role).
+
+    <Tip>
+      For a first test, log in with a **configurador** role account. This gives you access to the **Configuración** tab where you can create warehouses, clients, and additional users.
+    </Tip>
+  </Step>
+</Steps>
+
+## Available scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start Next.js in development mode with hot reload |
+| `npm run build` | Build the application for production |
+| `npm run start` | Start the production build |
+| `npm run lint` | Run ESLint |
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand how warehouses, zones, Firestore state, and roles fit together.
+  </Card>
+  <Card title="User roles" icon="users" href="/roles/overview">
+    Learn about the six roles and what each can do in the platform.
+  </Card>
+  <Card title="Warehouse management" icon="warehouse" href="/features/warehouse-management">
+    Create and manage multiple warehouses.
+  </Card>
+  <Card title="Environment variables" icon="gear" href="/configuration/environment-variables">
+    Full reference for all configuration options.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

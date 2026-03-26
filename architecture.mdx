@@ -1,0 +1,160 @@
+---
+title: "Architecture"
+description: "How Bodega de Frío is structured: zones, Firestore data model, real-time synchronization, role mapping, and external warehouse integration."
+---
+
+## Zone model
+
+Every box in the system moves through a sequence of zones. Each zone corresponds to a physical area of the warehouse and a key in the Firestore state document.
+
+| Zone | State key | Purpose |
+|------|-----------|---------|
+| **Ingresos** | `inboundBoxes` | Receiving area. Boxes arrive here and wait for a movement order to cold storage. |
+| **Bodega** | `slots` | Cold storage. 12 numbered positions (slots 1–12). Each slot holds one `Box` with a temperature reading. |
+| **Salida** | `outboundBoxes` | Outbound staging. Boxes approved for dispatch are moved here. |
+| **Despachados** | `dispatchedBoxes` | Dispatched archive. Boxes that have left the facility are recorded here permanently. |
+
+Boxes move between zones through **orders**. An order specifies the source zone (`ingresos`, `bodega`, or `salida`), the source position, and the order type:
+
+- `a_bodega` — move the box into a cold storage slot
+- `a_salida` — move the box to the outbound staging area
+- `revisar` — flag the box for inspection
+
+## Firestore data model
+
+All warehouse state lives under a single Firestore path per warehouse:
+
+```
+warehouses/
+  {warehouseId}/
+    state/
+      main      ← live operational state
+      history   ← historical log
+```
+
+### `state/main` document
+
+The `main` document holds the complete live state of the warehouse. It is written by `saveWarehouseState` and read by `subscribeWarehouseState`.
+
+```typescript
+type CloudWarehouseState = {
+  slots: Slot[];               // 12 cold storage positions
+  inboundBoxes: Box[];         // boxes in Ingresos
+  outboundBoxes: Box[];        // boxes in Salida
+  dispatchedBoxes: Box[];      // dispatched archive
+  orders: BodegaOrder[];       // pending movement orders
+  stats: BodegaStats;          // ingresos / salidas / movimientosBodega counters
+  warehouseName: string;
+  alerts: AlertItem[];         // active alerts
+  assignedAlerts: AlertAssignment[];
+  alertasOperario: Array<{ position: number; [key: string]: unknown }>;
+  alertasOperarioSolved: number[];
+  llamadasJefe: Array<Record<string, unknown>>;
+};
+```
+
+### `state/history` document
+
+The `history` document accumulates an audit trail of completed operations.
+
+```typescript
+type HistoryState = {
+  ingresos: Box[];                  // boxes that entered cold storage
+  salidas: BodegaOrder[];           // outbound movement orders
+  movimientosBodega: BodegaOrder[]; // internal slot movements
+  alertas: AlertHistoryEntry[];     // resolved alerts
+};
+```
+
+### Initialization
+
+When the application first connects to a warehouse, `ensureWarehouseState` and `ensureHistoryState` check whether the documents exist. If they do not, the functions write the default empty state using `serverTimestamp()` for `createdAt`.
+
+## Real-time synchronization
+
+The application subscribes to live updates using `subscribeWarehouseState` in `lib/bodegaCloudState.ts`:
+
+```typescript
+export function subscribeWarehouseState(
+  warehouseId: string,
+  handler: (state: CloudWarehouseState) => void,
+) {
+  const ref = doc(db, "warehouses", warehouseId, "state", "main");
+  ensureWarehouseState(warehouseId).catch(() => {});
+  return onSnapshot(ref, (snap) => {
+    if (!snap.exists()) {
+      handler(defaultWarehouseState);
+      return;
+    }
+    const data = snap.data() as Partial<CloudWarehouseState>;
+    handler({ ...defaultWarehouseState, ...data });
+  });
+}
+```
+
+Firestore's `onSnapshot` listener fires every time the `main` document changes. The returned unsubscribe function is called when the component unmounts. This means all connected sessions see changes within milliseconds — no polling required.
+
+Writes use `saveWarehouseState`, which calls `setDoc` with `{ merge: true }` so that partial updates never overwrite unrelated fields.
+
+## Role-to-view mapping
+
+The `Role` type defines six roles. Each role sees a different subset of dashboard tabs and controls.
+
+| Role | Description | Primary views |
+|------|-------------|---------------|
+| `custodio` | Warehouse custodian | **Estado Bodega**, **Ingresos**, **Salida** |
+| `administrador` | Warehouse administrator | All zones, **Reportes**, user management |
+| `operario` | Floor operator | **Estado Bodega**, assigned orders, operator alerts |
+| `jefe` | Shift supervisor | **Órdenes**, alert assignments, **Estado Bodega** |
+| `cliente` | Client (external) | Read-only view of their own boxes |
+| `configurador` | System configurator | **Configurator** panel — manages users, warehouses, and clients |
+
+Role assignment happens in Firestore under each user's profile document. The `configurador` role is the only role that can create new users via `createUserWithEmailAndPassword` through a secondary Firebase Auth instance (`getSecondaryAuth`), ensuring the configurator's own session is not interrupted.
+
+## Firebase client setup
+
+The Firebase SDK is initialized once in `lib/firebaseClient.ts`. It reads configuration from the six `NEXT_PUBLIC_FIREBASE_*` environment variables and falls back to demo values when they are absent.
+
+```typescript
+export const auth = getAuth(app);       // Firebase Authentication
+export const db = getFirestore(app);    // Firestore (primary database)
+export const storage = getStorage(app); // Firebase Storage
+```
+
+A secondary app instance named `"Secondary"` is initialized on demand by `getSecondaryAuth()` for user creation operations.
+
+## External warehouse integration (Fridem)
+
+The application supports reading slot inventory from an external warehouse via Firebase Realtime Database. The external warehouse is identified by the constant `FRIDEM_WAREHOUSE_ID` (`x7T7rQc7hmTXxJ5df27B`) and fetched through `fetchFridemSlots` in `lib/fridemInventory.ts`.
+
+This integration is used in the **bodega externa** admin section to display and import inventory from the Fridem facility into the main Firestore state.
+
+<Info>
+  The Fridem integration connects to a separate Firebase project (configured in `lib/fridemClient.ts`). It uses the `NEXT_PUBLIC_FRIDEM_*` environment variables. The Realtime Database connection (`fridemDatabase`) is only established when `NEXT_PUBLIC_FRIDEM_DATABASE_URL` is set.
+</Info>
+
+## Component structure
+
+```
+app/
+  page.tsx                        # entry point — renders BodegaDashboard
+  components/
+    BodegaDashboard.tsx           # business logic, state, Firestore subscriptions
+    BodegaDashboard/
+      EstadoBodegaSection.tsx     # slots 1–12 grid
+      IngresosSection.tsx         # inbound zone
+      DespachadosSection.tsx      # dispatched archive
+      OrdenesJefeSection.tsx      # order management (jefe)
+      ReportesSection.tsx         # PDF/CSV report export
+    bodega/
+      Header.tsx                  # top navigation and warehouse selector
+      SlotCard.tsx                # individual slot display
+      ConfiguratorPanel.tsx       # user and warehouse management
+      LoginCard.tsx               # authentication form
+lib/
+  firebaseClient.ts               # Firebase SDK initialization
+  bodegaCloudState.ts             # Firestore read/write/subscribe helpers
+  fridemInventory.ts              # external warehouse (Fridem) integration
+app/interfaces/
+  bodega.ts                       # shared TypeScript types
+```

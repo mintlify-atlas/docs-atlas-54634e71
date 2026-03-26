@@ -1,0 +1,173 @@
+---
+title: "CompradorService"
+description: "CRUD service for managing compradores (buyers) in Firestore."
+---
+
+`CompradorService` is a plain object that exposes async methods for creating, reading, updating, and deleting comprador records in Firestore. Each comprador receives an auto-incremented numeric ID and a human-readable base-36 code generated from that ID.
+
+## Firestore path
+
+```
+warehouses/GENERAL/compradores/{documentId}
+```
+
+## Comprador type
+
+```typescript
+export interface Comprador {
+  id?: string;       // Firestore document ID (populated after reads)
+  numericId: number; // Auto-incremented integer
+  code: string;      // Base-36 string, 4 characters, uppercase
+  name: string;
+  createdAt: number; // Unix timestamp in milliseconds
+}
+```
+
+<ResponseField name="id" type="string">
+  Firestore document ID. Set automatically on read; absent on write objects.
+</ResponseField>
+
+<ResponseField name="numericId" type="number">
+  Monotonically increasing integer assigned at creation time. Never changes after creation.
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Base-36 representation of `numericId`, uppercase, left-padded to 4 characters. For example, `numericId` 1 → `"0001"`, 36 → `"0010"`. Immutable after creation.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Display name of the comprador. The only mutable field after creation.
+</ResponseField>
+
+<ResponseField name="createdAt" type="number">
+  Unix timestamp (milliseconds) recorded at creation via `Date.now()`.
+</ResponseField>
+
+---
+
+## Methods
+
+### CompradorService.toBase36
+
+```typescript
+toBase36(num: number): string
+```
+
+Converts a positive integer to an uppercase base-36 string padded to a minimum of 4 characters.
+
+<ParamField path="num" type="number" required>
+  The integer to convert. Intended for internal use with `numericId` values.
+</ParamField>
+
+<ResponseField name="returns" type="string">
+  Uppercase base-36 string, at least 4 characters long.
+</ResponseField>
+
+| Input | Output |
+|---|---|
+| `1` | `"0001"` |
+| `10` | `"000A"` |
+| `35` | `"000Z"` |
+| `36` | `"0010"` |
+
+---
+
+### CompradorService.getAll
+
+```typescript
+async getAll(): Promise<Comprador[]>
+```
+
+Fetches all compradores from Firestore ordered by `numericId` ascending.
+
+<ResponseField name="returns" type="Promise<Comprador[]>">
+  Resolves with an array of compradores sorted by `numericId` ascending. Returns an empty array if the collection is empty or if Firestore throws an error — the method never rejects.
+</ResponseField>
+
+```typescript
+import { CompradorService } from "@/app/services/compradorService";
+
+const compradores = await CompradorService.getAll();
+// [{ id: "abc", numericId: 1, code: "0001", name: "Cliente A", createdAt: 1700000000000 }, ...]
+```
+
+<Note>
+  On error, `getAll` logs to `console.error` and returns `[]` instead of throwing. Check the browser console if you receive an unexpectedly empty array.
+</Note>
+
+---
+
+### CompradorService.create
+
+```typescript
+async create(name: string): Promise<DocumentReference>
+```
+
+Creates a new comprador with an auto-incremented `numericId` and a derived `code`. The method queries the collection for the current highest `numericId`, increments it by 1, and writes the new document.
+
+<ParamField path="name" type="string" required>
+  Display name of the comprador. Leading and trailing whitespace is trimmed automatically.
+</ParamField>
+
+<ResponseField name="returns" type="Promise<DocumentReference>">
+  Resolves with the Firestore `DocumentReference` for the newly created document.
+</ResponseField>
+
+```typescript
+import { CompradorService } from "@/app/services/compradorService";
+
+const ref = await CompradorService.create("Distribuidora Pérez");
+console.log(ref.id); // Firestore document ID
+```
+
+<Tip>
+  If no compradores exist yet, the first record receives `numericId: 1` and `code: "0001"`.
+</Tip>
+
+---
+
+### CompradorService.update
+
+```typescript
+async update(id: string, data: Partial<Comprador>): Promise<void>
+```
+
+Updates a comprador document. Only the `name` field is written; `code` and `numericId` are intentionally excluded to preserve sequence integrity.
+
+<ParamField path="id" type="string" required>
+  The Firestore document ID of the comprador to update.
+</ParamField>
+
+<ParamField path="data" type="Partial<Comprador>" required>
+  Update payload. Only `data.name` is applied. Pass `{ name: "New Name" }` to rename the comprador.
+</ParamField>
+
+```typescript
+await CompradorService.update("firestoreDocId", { name: "Nuevo Nombre" });
+```
+
+<Warning>
+  Passing fields other than `name` in `data` has no effect. `code` and `numericId` cannot be changed through this method.
+</Warning>
+
+---
+
+### CompradorService.delete
+
+```typescript
+async delete(id: string): Promise<void>
+```
+
+Deletes a comprador document from Firestore by its document ID.
+
+<ParamField path="id" type="string" required>
+  The Firestore document ID of the comprador to delete.
+</ParamField>
+
+```typescript
+await CompradorService.delete("firestoreDocId");
+```
+
+<Warning>
+  Deletion is permanent. Because `numericId` values are not recycled, deleting a comprador creates a permanent gap in the numeric sequence.
+</Warning>

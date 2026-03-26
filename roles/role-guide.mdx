@@ -1,0 +1,213 @@
+---
+title: 'Role guide'
+description: 'What each role can see and do in the Bodega de Frío dashboard — tabs, actions, and restrictions.'
+---
+
+Every user sees a version of the dashboard tailored to their role. This page documents exactly which tabs are shown, which actions are permitted, and what restrictions apply for each of the six roles.
+
+## Authentication
+
+All roles authenticate using Firebase Auth email and password. After sign-in, the dashboard fetches the user profile from Firestore (`users/{uid}` or `usuarios/{uid}`) to resolve the role before rendering any content.
+
+---
+
+<AccordionGroup>
+
+  <Accordion title="custodio — Base warehouse operator">
+
+    **Visible tab:** `ingresos`
+
+    The **custodio** is the only role that can register new boxes into the warehouse through the ingreso form.
+
+    **What you can do:**
+    - Register a new inbound box by entering its name, temperature, position, and client.
+    - View the current list of inbound boxes and outbound (salida) boxes.
+    - Dispatch a box from ingresos directly.
+    - Create a return order for a box.
+
+    **Restrictions:**
+    - Cannot create movement orders (`a_bodega`, `a_salida`). Order creation is restricted to the **jefe**.
+    - Cannot execute orders. Order execution is restricted to the **operario**.
+    - Cannot view the warehouse state grid (`estado` tab).
+    - Cannot access alerts, reportes, ordenes, solicitudes, or configuracion tabs.
+
+  </Accordion>
+
+  <Accordion title="operario — Field operator">
+
+    **Visible tab:** `solicitudes`
+
+    The **operario** sees the pending work queue assigned by the **jefe** and executes each order in the field.
+
+    **What you can do:**
+    - Execute pending orders (`a_bodega`, `a_salida`, `revisar`) from the solicitudes tab.
+    - Report a failed order — this creates a `reporte` alert sent to the jefe.
+    - Execute alerts assigned to you by the jefe:
+      - **Temperature alerts:** open the temperature resolution modal, enter the corrected temperature, and save.
+      - **Report alerts:** reprograms the failed order and resolves the alert.
+
+    **Restrictions:**
+    - Cannot create orders. The message `"Solo el jefe crea ordenes."` is shown if attempted.
+    - Cannot assign alerts to others. Alert assignment is restricted to the **jefe**.
+    - Cannot view the warehouse state grid, ingresos, reportes, or configuracion tabs.
+
+  </Accordion>
+
+  <Accordion title="jefe — Supervisor">
+
+    **Visible tab:** `ordenes` (always active; the tab bar is hidden since this is the only view)
+
+    The **jefe** lands directly on the ordenes view. There is no tab switcher — the ordenes section is the entire interface.
+
+    **What you can do:**
+    - Create movement orders of type:
+      - `a_bodega` — move a box from ingresos or bodega to a free bodega slot.
+      - `a_salida` — move a box from bodega to the salida zone.
+      - `revisar` — flag a box in bodega for inspection.
+    - Create review orders (`revisar`) for boxes in bodega.
+    - View all pending alerts in the alerts panel.
+    - Assign `temperatura` and `reporte` alerts to the operario.
+
+    **Restrictions:**
+    - Cannot execute orders. Execution is restricted to the **operario**.
+    - Cannot register inbound boxes. Registration is restricted to the **custodio**.
+    - Cannot access estado, ingresos, solicitudes, reportes, or configuracion tabs.
+    - Alerts of kind `"otro"` cannot be assigned to the operario.
+
+  </Accordion>
+
+  <Accordion title="administrador — Administrator">
+
+    **Visible tabs:** `estado`, `reportes`
+
+    When the **administrador** logs in, the dashboard first shows the **AdminSection** module menu. Selecting **Bodega interna** opens the full warehouse dashboard.
+
+    **AdminSection modules:**
+
+    | Module | Description |
+    |---|---|
+    | `compras` | Purchase orders and supplier management (placeholder view) |
+    | `transporte` | Routes and delivery coordination (placeholder view) |
+    | `bodega_interna` | Opens the full warehouse state and tabs |
+    | `bodega_externa` | External warehouse integration (placeholder view) |
+
+    **What you can do inside bodega_interna:**
+    - View the full warehouse state grid (`estado` tab) — all inbound boxes, bodega slots, and outbound boxes.
+    - Use the search function to find a box by ID.
+    - Select an active warehouse from the warehouse selector.
+    - Create a new warehouse.
+    - View reports and statistics (`reportes` tab).
+    - Return to the AdminSection menu at any time.
+
+    **Restrictions:**
+    - Cannot create orders. Order creation is restricted to the **jefe**.
+    - Cannot register inbound boxes. Registration is restricted to the **custodio**.
+    - Cannot execute orders. Execution is restricted to the **operario**.
+    - Cannot access the configuracion tab. User and client management is restricted to the **configurador**.
+
+  </Accordion>
+
+  <Accordion title="cliente — Client view">
+
+    **Visible tabs:** `ingresos`, `reportes`
+
+    The **cliente** sees a filtered version of the warehouse. All data is scoped to their `clientId` stored in their Firestore profile.
+
+    **What you can see:**
+    - Inbound boxes where `box.client === clientId`.
+    - Outbound boxes where `box.client === clientId`.
+    - Dispatched boxes where `box.client === clientId`.
+    - Bodega slots where `slot.client === clientId`.
+    - Orders linked to their boxes (matched by `order.client`, source position, or target position).
+    - Alerts associated with their box `autoId` values.
+    - Statistics and charts scoped to their items only.
+
+    **Restrictions:**
+    - Cannot create, modify, or execute orders.
+    - Cannot register inbound boxes.
+    - Cannot view data belonging to other clients.
+    - Cannot access estado, ordenes, solicitudes, alertas, or configuracion tabs.
+
+    <Note>
+    The client filter uses `clientFilterId`, initialized from `session.clientId`. All list views — inbound, outbound, dispatched, slots, orders, and history — are filtered server-side before rendering.
+    </Note>
+
+  </Accordion>
+
+  <Accordion title="configurador — System configurator">
+
+    **Visible tab:** `configuracion`
+
+    The **configurador** has no warehouse operations view. Their entire dashboard is the **configuracion** tab, which exposes three management sections.
+
+    **What you can do:**
+
+    *Users (`usuarios` collection):*
+    - List all users with their name, role, email, and creation metadata.
+    - Create a new user (see steps below).
+    - Enable or disable an existing user.
+    - Update user details.
+
+    *Clients (`clientes` collection):*
+    - List all clients with their name and code.
+    - Create a new client with an auto-generated code.
+    - Enable or disable an existing client.
+    - Update client details.
+
+    *Warehouses (`warehouses` collection):*
+    - List all warehouses.
+    - Create a new warehouse with a name and capacity.
+    - Enable or disable a warehouse.
+    - Update warehouse details.
+
+    **Restrictions:**
+    - Cannot view or interact with the warehouse state, ingresos, orders, or reports.
+    - Cannot access estado, ingresos, ordenes, solicitudes, alertas, or reportes tabs.
+
+  </Accordion>
+
+</AccordionGroup>
+
+---
+
+## How an administrator creates a new user
+
+Only a **configurador** can create users. The operation uses a secondary Firebase Auth instance to create the account without signing out the configurador's own session.
+
+<Steps>
+  <Step title="Open the configuracion tab">
+    Sign in as a **configurador**. The dashboard lands directly on the **configuracion** tab. Scroll to the Users section.
+  </Step>
+  <Step title="Fill in the user form">
+    Enter the required fields:
+    - **Name** — display name stored as `name` and `displayName` in Firestore.
+    - **Email** — used for Firebase Auth and stored in `usuarios/{uid}.email`.
+    - **Password** — minimum length enforced by Firebase Auth.
+    - **Role** — select one of the six valid roles from the dropdown.
+    - **Client ID** — required only when the role is `cliente`; must match an existing document ID in the `clientes` collection.
+  </Step>
+  <Step title="Submit">
+    Click **Create user**. The dashboard calls `createUserWithEmailAndPassword` on the secondary Auth instance, then writes a document to `usuarios/{uid}` with the following fields:
+
+    ```typescript
+    {
+      name: string;
+      role: Role;
+      clientId: string;
+      email: string;
+      displayName: string;
+      createdAt: serverTimestamp();
+      createdBy: string;      // uid of the configurador
+      createdByRole: Role;    // "configurador"
+      disabled: false;
+    }
+    ```
+  </Step>
+  <Step title="Verify">
+    The new user appears at the top of the users list. The user can now sign in using the email and password you provided. Their role takes effect immediately on first login.
+  </Step>
+</Steps>
+
+<Tip>
+If you need to link a new user to a client, copy the document ID from the **clientes** list in the same configuracion tab and paste it into the **Client ID** field before submitting.
+</Tip>

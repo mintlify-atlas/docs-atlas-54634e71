@@ -1,0 +1,78 @@
+---
+title: 'Environment variables'
+description: 'All environment variables required to run Bodega de Frío, including Firebase credentials and the optional Fridem integration.'
+keywords: ['environment variables', 'env', 'firebase', 'fridem', 'configuration']
+---
+
+Bodega de Frío reads its configuration from environment variables at build time and at runtime. Create a `.env.local` file at the project root and populate it with the values below.
+
+<Warning>
+  Never commit `.env.local` to version control. It contains secrets. Add it to `.gitignore` if it is not already there.
+</Warning>
+
+## Firebase (primary app)
+
+These variables configure the main Firebase app defined in `lib/firebaseClient.ts`. You obtain the values when you [register a web app](/configuration/firebase-setup) in the Firebase console.
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Web API key for the Firebase project |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Authentication domain, e.g. `your-project.firebaseapp.com` |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Unique identifier for your Firebase project |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Cloud Storage bucket, e.g. `your-project.appspot.com` |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Sender ID used by Firebase Cloud Messaging |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | App ID assigned when you registered the web app |
+
+## Warehouse identifier
+
+| Variable | Default | Description |
+|---|---|---|
+| `NEXT_PUBLIC_WAREHOUSE_ID` | `"default"` | The Firestore document ID under the `warehouses` collection that this deployment manages. Defined in `lib/bodegaCloudState.ts` as `process.env.NEXT_PUBLIC_WAREHOUSE_ID ?? "default"`. Set this to a unique value for each warehouse installation. |
+
+## Fridem integration (optional)
+
+These variables configure the secondary Firebase app used to connect to the external Fridem service (`lib/fridemClient.ts`). All are optional — if `NEXT_PUBLIC_FRIDEM_API_KEY`, `NEXT_PUBLIC_FRIDEM_PROJECT_ID`, and `NEXT_PUBLIC_FRIDEM_APP_ID` are absent, the integration is disabled entirely.
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_FRIDEM_API_KEY` | Web API key for the Fridem Firebase project |
+| `NEXT_PUBLIC_FRIDEM_AUTH_DOMAIN` | Auth domain for the Fridem project |
+| `NEXT_PUBLIC_FRIDEM_PROJECT_ID` | Project ID for the Fridem Firebase project |
+| `NEXT_PUBLIC_FRIDEM_STORAGE_BUCKET` | Cloud Storage bucket for the Fridem project |
+| `NEXT_PUBLIC_FRIDEM_MESSAGING_SENDER_ID` | Messaging sender ID for the Fridem project |
+| `NEXT_PUBLIC_FRIDEM_APP_ID` | App ID for the Fridem project |
+| `NEXT_PUBLIC_FRIDEM_MEASUREMENT_ID` | Google Analytics measurement ID for the Fridem project |
+| `NEXT_PUBLIC_FRIDEM_DATABASE_URL` | Realtime Database URL. Required to enable `fridemDatabase`; if omitted, only Firestore is used. |
+
+<Note>
+  `NEXT_PUBLIC_FRIDEM_DATABASE_URL` is the only Fridem variable without a hard-coded fallback in `fridemClient.ts`. You must set it explicitly to activate the Realtime Database connection.
+</Note>
+
+## Complete .env.local example
+
+```plaintext .env.local
+# ── Primary Firebase app ────────────────────────────────────────────────────
+NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=000000000000
+NEXT_PUBLIC_FIREBASE_APP_ID=1:000000000000:web:your-app-id
+
+# ── Warehouse identifier ────────────────────────────────────────────────────
+NEXT_PUBLIC_WAREHOUSE_ID=warehouse-001
+
+# ── Fridem integration (optional) ──────────────────────────────────────────
+NEXT_PUBLIC_FRIDEM_API_KEY=your-fridem-api-key
+NEXT_PUBLIC_FRIDEM_AUTH_DOMAIN=fridem.firebaseapp.com
+NEXT_PUBLIC_FRIDEM_PROJECT_ID=fridem
+NEXT_PUBLIC_FRIDEM_STORAGE_BUCKET=fridem.firebasestorage.app
+NEXT_PUBLIC_FRIDEM_MESSAGING_SENDER_ID=816155410877
+NEXT_PUBLIC_FRIDEM_APP_ID=1:816155410877:web:your-fridem-app-id
+NEXT_PUBLIC_FRIDEM_MEASUREMENT_ID=G-XXXXXXXXXX
+NEXT_PUBLIC_FRIDEM_DATABASE_URL=https://fridem-default-rtdb.firebaseio.com
+```
+
+<Tip>
+  Because all variables are prefixed with `NEXT_PUBLIC_`, they are bundled into the client-side JavaScript. Do not store server-only secrets (such as Firebase Admin SDK service account keys) under this prefix.
+</Tip>

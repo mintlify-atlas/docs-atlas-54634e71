@@ -1,0 +1,159 @@
+---
+title: "Temperature alerts"
+description: "How Bodega de Frío detects, assigns, and resolves temperature and operational alerts."
+---
+
+Bodega de Frío monitors every box in all three zones continuously. When a condition is detected, an alert is created automatically and placed in the alert queue for the **jefe** to review.
+
+## Temperature threshold
+
+Any box with a temperature **above 5 °C** triggers a temperature alert. This is evaluated in real time for all three zones:
+
+```typescript
+const inboundHighBoxes  = inboundBoxes.filter(box => box.temperature > 5);
+const bodegaHighSlots   = slots.filter(slot =>
+  typeof slot.temperature === "number" && slot.temperature > 5
+);
+const outboundHighBoxes = outboundBoxes.filter(box => box.temperature > 5);
+```
+
+## Alert types
+
+<AccordionGroup>
+  <Accordion title="Temperature alerts (alerta-temp-*)">
+    Generated automatically when a box exceeds 5 °C. The ID format is:
+
+    ```
+    alerta-temp-{zone}-{position}-{autoId}
+    ```
+
+    where `{zone}` is `entrada`, `bodega`, or `salida`.
+
+    Example: `alerta-temp-bodega-3-BOX-20260326-001`
+  </Accordion>
+  <Accordion title="Order overdue alerts (alerta-orden-*)">
+    Generated when an order has been pending for more than 2 minutes. The ID format is:
+
+    ```
+    alerta-orden-{orderId}
+    ```
+
+    These resolve automatically when the order is executed or reprogrammed.
+  </Accordion>
+  <Accordion title="Report failure alerts (alerta-fallo-*)">
+    Generated when an **operario** reports that they cannot complete an order. The ID format is:
+
+    ```
+    alerta-fallo-{timestamp}-{random}
+    ```
+
+    These are linked to the source order via `sourceOrderId`.
+  </Accordion>
+</AccordionGroup>
+
+## Alert data types
+
+### AlertItem
+
+```typescript
+type AlertItem = {
+  id: string;
+  title: string;
+  description: string;
+  reason?: AlertReason;       // set when an operario fails to resolve
+  sourceOrderId?: string;     // links alerta-fallo-* to the originating order
+  meta?: string;
+  createdAt?: string;
+};
+```
+
+### AlertAssignment
+
+```typescript
+type AlertAssignment = {
+  alertId: string;
+  kind: "temperatura" | "reporte" | "otro";
+  assignedAt: string;
+  assignedBy: string;         // display name of the jefe
+  sourceOrderId?: string;
+  position?: number;
+};
+```
+
+## Zones monitored
+
+All three zones are monitored simultaneously:
+
+| Zone | Monitored collection | Alert ID prefix |
+|---|---|---|
+| **Ingresos** | `inboundBoxes` | `alerta-temp-entrada-` |
+| **Bodega** | `slots` | `alerta-temp-bodega-` |
+| **Salida** | `outboundBoxes` | `alerta-temp-salida-` |
+
+## Alert assignment
+
+Only the **jefe** can assign alerts to operators. Alerts of kind `temperatura` or `reporte` are eligible for assignment; kind `otro` cannot be assigned.
+
+<Steps>
+  <Step title="Review active alerts">
+    The jefe sees all active alerts in the alert management panel, each showing the title, description, and whether it has already been assigned.
+  </Step>
+  <Step title="Assign to operario">
+    Clicking **Asignar a operario** calls `handleAssignAlert`, which appends an `AlertAssignment` record to `assignedAlerts`. The alert immediately appears in the operario's assigned alerts list.
+  </Step>
+</Steps>
+
+<Note>
+  An alert can only be assigned once. The assign button is disabled if `assignedAlerts` already contains an entry for that alert ID.
+</Note>
+
+## Alert resolution
+
+Operarios resolve assigned alerts from their queue.
+
+### Temperature alert resolution
+
+<Steps>
+  <Step title="Open the resolve modal">
+    The operario clicks the action button on a `temperatura` alert. The modal pre-fills the zone and position from the alert ID.
+  </Step>
+  <Step title="Enter the corrected temperature">
+    The operario types the new temperature reading in °C.
+  </Step>
+  <Step title="Submit">
+    `handleResolveWithSolution` updates the box temperature in `inboundBoxes`, `slots`, or `outboundBoxes` depending on the zone, then calls `handleResolveAlert` to remove the alert from both `alerts` and `assignedAlerts`.
+  </Step>
+</Steps>
+
+### Report failure alert resolution
+
+When a `reporte` alert is actioned, the source order's `createdAtMs` is reset to `Date.now()`, restarting the 2-minute overdue clock. The alert is then cleared.
+
+## Resolution reasons
+
+If an operario cannot manage an alert they can record a reason:
+
+| Value | Label |
+|---|---|
+| `no_tuve_tiempo` | No tuve tiempo |
+| `no_quise` | No quise |
+| `no_pude` | No pude |
+
+The reason is stored in `AlertItem.reason` and displayed to the **administrador** in the activity view.
+
+## Alert persistence
+
+New alerts are written to the history document as `AlertHistoryEntry` records via `addAlerta`:
+
+```typescript
+type AlertHistoryEntry = {
+  id: string;
+  title: string;
+  description: string;
+  createdAt: string;
+  createdAtMs: number;
+  meta?: string;
+};
+```
+
+History is stored at `warehouses/{warehouseId}/state/history` alongside ingresos, salidas, and movimientos.

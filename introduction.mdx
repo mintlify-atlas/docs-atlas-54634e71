@@ -1,0 +1,55 @@
+---
+title: "Introduction"
+description: "Bodega de Frío is a cold storage warehouse management SaaS built with Next.js and Firebase. It gives warehouse teams real-time visibility into every slot, box, and order across all their cold storage facilities."
+---
+
+## What is Bodega de Frío?
+
+Bodega de Frío is a multi-role warehouse management application designed specifically for cold storage operations. It tracks every box that enters, moves through, and exits a cold storage facility, maintaining a live shared state so all users — custodians, operators, supervisors, clients, and administrators — always see the same information.
+
+State is persisted in Firebase Firestore and synchronized in real time across all sessions. No page refresh is required. Changes made by one user propagate instantly to every other connected session.
+
+## What problem does it solve?
+
+Cold storage facilities face three common operational problems:
+
+- **Tracking accuracy** — physical items move frequently between inbound, storage, and outbound areas, and paper-based or spreadsheet tracking cannot keep up.
+- **Role-appropriate visibility** — different staff need different views: a client should only see their own boxes, while a supervisor needs a full operational overview.
+- **Alert accountability** — temperature incidents and failed operations need to be recorded, assigned, and resolved with an audit trail.
+
+Bodega de Frío solves all three by providing a role-gated dashboard, a structured order workflow, and a persistent alert system backed by Firestore.
+
+## Key concepts
+
+**Warehouses** — Each deployment manages one or more named warehouses. The active warehouse is selected at login and determines which Firestore document is loaded.
+
+**Slots** — A warehouse contains 12 numbered storage positions (slots 1–12). Each slot can hold one box at a time and stores the box's name, temperature reading, and client association.
+
+**Boxes** — A box is the unit of inventory. It carries an auto-generated ID (e.g. `BOX-20260326-001`), a human-readable name, a temperature value, and a client tag. Boxes progress through zones as orders are processed.
+
+**Zones** — Movement through the facility is organized into four zones:
+
+| Zone | Key | Description |
+|------|-----|-------------|
+| **Ingresos** | `entrada` | Inbound holding area for boxes arriving at the facility |
+| **Bodega** | `bodega` | Cold storage slots 1–12 where boxes are held at temperature |
+| **Salida** | `salida` | Outbound staging area for boxes approved for dispatch |
+| **Despachados** | — | Dispatched archive of boxes that have left the facility |
+
+**Orders** — An order (`BodegaOrder`) is a movement instruction. It specifies a source zone and position, an order type (`a_bodega`, `a_salida`, or `revisar`), and the role that created it. Orders are fulfilled by operators and tracked in history.
+
+**Alerts** — Alerts (`AlertItem`) are raised when an operation is missed or a temperature incident occurs. They carry a reason code (`no_tuve_tiempo`, `no_quise`, `no_pude`), can be assigned to a staff member, and are logged in alert history.
+
+## Next steps
+
+<CardGroup cols={3}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Clone the repo, configure Firebase, and run the app locally in minutes.
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/architecture">
+    Understand the Firestore data model, real-time sync, and zone flow.
+  </Card>
+  <Card title="Roles & access" icon="users" href="/roles/overview">
+    See what each of the six roles can see and do in the dashboard.
+  </Card>
+</CardGroup>
